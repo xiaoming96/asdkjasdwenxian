@@ -1,0 +1,66 @@
+# 《问长生》
+
+修仙题材单机肉鸽卡牌构筑游戏（Roguelike Deckbuilder）。手机浏览器 + 桌面 Web，竖屏单手可玩。
+
+一局之内从炼气走到飞升：捡功法（卡牌）、炼法宝（遗物）、嗑丹药，用五行相生相克打出行云流水的连招，闯过筑基雷劫、金丹心魔劫，最终硬抗九重天劫白日飞升，或身死道消、转世重来。
+
+完整设计文档见 `问长生-游戏策划案.md`（v2.0 详案）。
+
+## 快速开始
+
+```bash
+pnpm install        # 安装依赖
+pnpm dev            # 开发服务器（默认 http://localhost:5173）
+pnpm test           # 单元测试（vitest）
+pnpm lint           # ESLint（含"禁止 Math.random"规则，策划案 §16.4）
+pnpm build          # 生产构建（tsc + vite）
+pnpm sim -- --bots greedy --runs 1000 --ascension 0   # 无头模拟器（§16.6）
+```
+
+## 技术栈
+
+Vite + TypeScript + Preact；纯函数游戏引擎（零 DOM 依赖）；`localStorage` 存档；种子驱动多流 RNG。
+
+## 模块结构（对应策划案 §16.2）
+
+```
+src/
+  core/      纯函数游戏引擎
+    types.ts    GameState / Action 定义
+    run.ts      冒险层 reducer（唯一入口 reduce(state, action)）
+    combat.ts   战斗引擎（回合时序 §4.2、伤害管线 §4.3、行云流水/周天 §4.4）
+    wuxing.ts   五行相生相克判定
+    map.ts      种子驱动地图生成（§9.1）
+    rng.ts      多流种子随机（map/cardReward/shuffle/enemyAI/event/shop）
+  data/      配置表：75 卡+5 诅咒、25 法宝、12 丹药、39 敌人、30 事件、
+             突破、难度（九重天）、成就、解锁树、每日天机
+  sim/       无头模拟器（Node CLI，random/greedy bot，复用 core）
+  ui/        Preact 界面（主界面/地图/战斗/奖励/坊市/事件/洞府/突破/结算/藏经阁/转世/设置）
+  fx/        Canvas 水墨特效（墨溅/金色涟漪/劫雷白金闪）
+  audio/     Web Audio 合成音效（行云流水按五声宫商角徵羽对应五行）
+  save/      localStorage 存档与 schema 迁移
+scripts/
+  make-demo-save.ts  生成第三幕九重天劫演示存档（写入 public/dev_jie_run.json）
+```
+
+## 平衡现状（对照策划案 §12.3 门槛）
+
+单进程 500 局模拟（`pnpm sim`）：
+
+| 指标 | 门槛 | 现状 |
+|---|---|---|
+| random bot 通关率 | < 1% | 0% ✓ |
+| greedy bot 幕一通过率 | 55–70% | 58.2% ✓ |
+| greedy bot 通关率 | 8–15% | 4%（bot 策略较简单，待 M4 平衡阶段随 bot 强化复核） |
+| 平均单场回合 | 3–5 | 5.1（略高） |
+
+## 与策划案的已知偏差（v0.1 简化项）
+
+- 洛书（每回合保留 1 张手牌）自动保留最左侧非诅咒牌，暂无玩家选择。
+- 蜃楼幻市的 30% "幻醒"退货机制未实现，按 8 折坊市处理。
+- 忘川摆渡"跳至本幕任意未达层"简化为向上跳 2 层的随机节点。
+- 每日天机为本地版（无后端榜单，策划案本就定为 P1）。
+- BGM 未接入（P1 素材项）；音效全部为 Web Audio 代码合成。
+- 成就 20 项中 12 项已实现自动判定，其余（三劫齐渡、五雷轰顶、身外化身、图鉴集齐类、飞升三次、天机不可泄露）待补充统计埋点。
+- 埋点（§16.8）未接入。
+- 手牌交互为点选式（选卡 → 点目标 / 二次点击确认），拖拽手势为后续增强项。

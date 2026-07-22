@@ -1,0 +1,15 @@
+# AGENTS
+
+## Cursor Cloud specific instructions
+
+《问长生》：Vite + TypeScript + Preact 单页 Web 游戏（纯前端，无后端服务）。唯一需要运行的服务是 Vite 开发服务器：`pnpm dev`（监听 `0.0.0.0:5173`）。标准命令（dev/test/lint/build/sim）见 `README.md`。
+
+非显而易见的注意事项：
+
+- 包管理器为 pnpm。`typescript` 固定在 6.0.3：npm 上最新的 TypeScript 7（原生版）不满足 typescript-eslint 的 peer 依赖 `<6.1.0`，不要升级到 7.x。
+- ESLint 规则禁止 `Math.random`（策划案 §16.4），全部随机必须走 `src/core/rng.ts` 的多流种子随机。`src/core/rng.ts` 自身豁免。
+- 游戏引擎是纯函数 reducer：`reduce(state, action)` 入口在 `src/core/run.ts`，入口处 `structuredClone` 深拷贝，测试可依赖不可变性。不要在 UI 层直接改 `RunState`。
+- 无头模拟器：`pnpm sim -- --bots greedy --runs 200 --ascension 0`（约 5 秒）。改动战斗/数值后建议跑一次，对照 README 中的 §12.3 门槛表。
+- 端到端调试终局 Boss：`npx tsx scripts/make-demo-save.ts` 生成 `public/dev_jie_run.json`（已 gitignore），随后在浏览器控制台执行 `localStorage.setItem('wcs_run', await fetch('/dev_jie_run.json').then(r => r.text())); location.reload();` 并点击"续前缘"，即可直接进入第三幕九重天劫战斗。
+- 存档在 localStorage：`wcs_profile`（局外进度）与 `wcs_run`（当前局）。测试时用 `localStorage.clear()` 重置到全新状态。
+- 战斗内出牌交互：攻击牌需先点卡再点敌人；非指向牌点两次确认。自动化 UI 测试时注意这一点。

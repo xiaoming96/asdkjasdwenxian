@@ -237,15 +237,16 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 }
 .wcard.unplayable { filter: saturate(0.4) brightness(0.92); }
 .wcard.liushui-glow { box-shadow: 0 0 0 2.5px var(--liujin), 0 3px 10px rgba(184, 134, 11, 0.55); }
-.wcard .c-head { display: flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; }
+.wcard .c-head { display: flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 700; min-width: 0; }
 .wcard .c-cost {
   width: 20px; height: 20px; border-radius: 50%;
   background: var(--dailan); color: #fff;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px; flex-shrink: 0;
 }
-.wcard .c-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wcard .c-el { margin-left: auto; }
+.wcard .c-name { overflow: hidden; white-space: nowrap; flex: 1; font-size: 11.5px; }
+.wcard .c-el { margin-left: auto; flex-shrink: 0; }
+.wcard .c-el .el-badge { font-size: 10px; padding: 1px 3px; }
 .wcard .c-type { color: var(--dailan); font-size: 10px; margin: 1px 0; }
 .wcard .c-text { flex: 1; line-height: 1.35; overflow: hidden; }
 .wcard.rare-rare { border-color: var(--dailan); }
