@@ -654,7 +654,7 @@ function enemyTurn(run: RunState, b: BattleState) {
   if ((b.player.statuses.retainBlock ?? 0) > 0) {
     delete b.player.statuses.retainBlock; // 玄武镇海：保留一次
   } else {
-    let retain = Math.max(
+    const retain = Math.max(
       powerN(b, 'houdezaiwu'),
       run.breakthroughs.includes('houde_genji') ? 10 : 0,
     );

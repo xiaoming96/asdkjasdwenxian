@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { newRun, reduce, computeScore, computeDaowei } from './run';
 import { defaultProfile } from '../save/storage';
-import { selectableNodes, findNode } from './map';
+import { selectableNodes } from './map';
 import { settleRun } from '../save/profileLogic';
 
 describe('地图生成（§9.1）', () => {
