@@ -122,7 +122,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
     const id = fxId.current;
     setTimeout(() => {
       setFloats((f) => [...f, { id, x, y, text, cls }]);
-      setTimeout(() => setFloats((f) => f.filter((o) => o.id !== id)), 1150);
+      setTimeout(() => setFloats((f) => f.filter((o) => o.id !== id)), 1700);
     }, delay);
   }
 
@@ -177,17 +177,33 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       }
       const bg = e.block - pe.block;
       if (bg > 0) spawnFloat(pos.x, pos.y + 14, `护体+${bg}`, 'f-block', idx * 90);
+      else if (bg < 0 && dmg === 0) {
+        // 攻击被敌方护体完全吸收：也要有反馈
+        spawnFloat(pos.x, pos.y - 18, `护体挡下 ${-bg}`, 'f-blocked', idx * 90);
+        newHits.push(e.uid);
+        inkSplash(pos.clientX, pos.clientY);
+      }
     });
     if (newHits.length > 0) {
       setHitUids(newHits);
       setTimeout(() => setHitUids([]), 360);
     }
 
-    // 玩家差分：气血 / 护体
+    // 玩家差分：气血 / 护体（含格挡反馈）
     const hpD = run.hp - prev.hp;
+    const blkD = b.player.block - pb.player.block;
+    const turnChanged = b.turn !== pb.turn;
     if (hpD < 0) spawnFloat(px, py, `${hpD}`, 'f-dmg f-playerhit');
     else if (hpD > 0) spawnFloat(px, py, `+${hpD}`, 'f-heal');
-    const blkD = b.player.block - pb.player.block;
+    else if (turnChanged) {
+      // 回合结算中敌人有攻击意图但一滴血没掉：护体全部挡下
+      const incoming = pb.enemies
+        .filter((e) => e.hp > 0)
+        .reduce((s, e) => s + (intentDamage(pb, e) ?? 0), 0);
+      if (incoming > 0) spawnFloat(px, py, `护体挡下 ${Math.min(incoming, pb.player.block)}`, 'f-blocked');
+    } else if (blkD < 0) {
+      spawnFloat(px, py, `护体挡下 ${-blkD}`, 'f-blocked');
+    }
     if (blkD > 0) spawnFloat(px + 84, py, `护体+${blkD}`, 'f-block');
 
     // 触发类提示（来自战斗日志增量）

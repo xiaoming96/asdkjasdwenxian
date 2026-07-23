@@ -788,22 +788,27 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   transform: translate(-50%, -50%);
   font-weight: 700;
   white-space: nowrap;
-  animation: floatUp 1.05s ease-out forwards;
-  text-shadow: 0 1px 3px rgba(244, 239, 230, 0.9), 0 0 8px rgba(244, 239, 230, 0.6);
+  animation: floatUp 1.6s ease-out forwards;
+  text-shadow:
+    -1.5px 0 rgba(250, 246, 236, 0.95), 1.5px 0 rgba(250, 246, 236, 0.95),
+    0 -1.5px rgba(250, 246, 236, 0.95), 0 1.5px rgba(250, 246, 236, 0.95),
+    0 2px 8px rgba(43, 43, 43, 0.35);
 }
 @keyframes floatUp {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
-  12% { opacity: 1; transform: translate(-50%, -58%) scale(1.18); }
-  30% { transform: translate(-50%, -70%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -190%) scale(0.95); }
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  10% { opacity: 1; transform: translate(-50%, -62%) scale(1.25); }
+  24% { transform: translate(-50%, -74%) scale(1); }
+  70% { opacity: 1; transform: translate(-50%, -130%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -210%) scale(0.95); }
 }
-.f-dmg { color: var(--zhusha); font-size: 26px; }
-.f-dmg.f-playerhit { font-size: 30px; }
-.f-heal { color: #2e7d32; font-size: 24px; }
-.f-block { color: var(--dailan); font-size: 16px; }
-.f-gold { color: var(--liujin); font-size: 17px; letter-spacing: 1px; }
-.f-gold.f-bigfx { font-size: 21px; }
-.f-ke { color: #d84315; font-size: 19px; letter-spacing: 2px; }
+.f-dmg { color: var(--zhusha); font-size: 32px; }
+.f-dmg.f-playerhit { font-size: 36px; }
+.f-heal { color: #2e7d32; font-size: 28px; }
+.f-block { color: var(--dailan); font-size: 18px; }
+.f-blocked { color: #5b6b80; font-size: 18px; letter-spacing: 1px; }
+.f-gold { color: var(--liujin); font-size: 19px; letter-spacing: 1px; }
+.f-gold.f-bigfx { font-size: 23px; }
+.f-ke { color: #d84315; font-size: 22px; letter-spacing: 2px; }
 /* 出牌飞行残影（§13.4 出牌飞行 220ms） */
 .card-ghost {
   position: absolute;
