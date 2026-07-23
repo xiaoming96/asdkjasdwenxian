@@ -60,6 +60,22 @@ function intentText(run: RunState, e: EnemyState): string {
   }
 }
 
+/** 新手引导四步（策划案 §13.5，本地进度存 localStorage） */
+const GUIDE_STEPS = [
+  '出牌方法：先点选一张手牌；攻击牌再点上方敌人释放，防御与技能牌再点一次自己即可打出。',
+  '敌人头顶显示下回合意图：🗡 数字是来袭伤害，打出防御牌获得护体可以抵挡。',
+  '五行相生连招：带金边高亮的牌与当前行位相生，打出触发【行云流水】，效果 +25% 并返还灵气。',
+  '五行相克：用克制敌人属性的攻击牌伤害 ×1.5 并附加异常。随时点左上『☯五行』查看口诀。',
+];
+
+function loadGuideStep(): number {
+  try {
+    return Number(localStorage.getItem('wcs_guide') ?? '0');
+  } catch {
+    return 99;
+  }
+}
+
 export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => void }) {
   const { run, dispatch } = props;
   const b = run.battle!;
@@ -67,9 +83,18 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   const [viewPile, setViewPile] = useState<'draw' | 'discard' | 'exhaust' | null>(null);
   const [pickedUids, setPickedUids] = useState<number[]>([]);
   const [potionTarget, setPotionTarget] = useState<string | null>(null);
+  const [showWuxing, setShowWuxing] = useState(false);
+  const [guideStep, setGuideStep] = useState<number>(() => loadGuideStep());
+
+  function advanceGuide() {
+    const next = guideStep + 1;
+    setGuideStep(next);
+    try { localStorage.setItem('wcs_guide', String(next)); } catch { /* 忽略 */ }
+  }
 
   const selectedCard = b.hand.find((c) => c.uid === selected) ?? null;
   const isJie = b.waveIndex >= 0;
+  const anyPlayable = b.hand.some((c) => canPlay(run, b, c));
 
   function needsTarget(cardId: string): boolean {
     const def = getCard(cardId);
@@ -124,6 +149,14 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
 
   const choice = b.pendingChoice;
 
+  // 目标选择状态：攻击牌/指向技能已选中，等待点敌人
+  const awaitingTarget =
+    (selectedCard && needsTarget(selectedCard.cardId) && !getCard(selectedCard.cardId).base.aoe && canPlay(run, b, selectedCard)) ||
+    potionTarget !== null;
+  // 已选中的非指向牌：再点一次打出
+  const awaitingConfirm =
+    selectedCard && !awaitingTarget && canPlay(run, b, selectedCard);
+
   return (
     <div
       class={`battle fade-in ${isJie ? 'jie-bg' : ''}`}
@@ -133,7 +166,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
         {b.enemies.map((e) => (
           <div
             key={e.uid}
-            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''}`}
+            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''} ${awaitingTarget && e.hp > 0 ? 'targetable' : ''}`}
             onClick={() => e.hp > 0 && tapEnemy(e)}
           >
             <div class="enemy-intent">{intentText(run, e)}</div>
@@ -151,6 +184,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       </div>
 
       <div class="mid-zone">
+        <button class="wuxing-btn" onClick={() => setShowWuxing(true)} title="五行速查">☯五行</button>
         <div class="xingwei-ring" title="行位：最后打出的有属性牌之五行。打出被其所生的牌触发行云流水。">
           行位
           {ELEMENTS.map((el) => (
@@ -190,18 +224,52 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
             />
           ))}
         </div>
+        {(awaitingTarget || awaitingConfirm || (!anyPlayable && !choice)) && (
+          <div class={`action-hint ${awaitingTarget ? 'hint-target' : ''}`}>
+            {potionTarget
+              ? '⬆ 点选丹药目标'
+              : awaitingTarget
+                ? `⬆ 点选上方敌人，释放【${getCard(selectedCard!.cardId).name}】`
+                : awaitingConfirm
+                  ? `再点一次【${getCard(selectedCard!.cardId).name}】打出`
+                  : '灵气不足或无可出之牌，点右下【结束回合】'}
+          </div>
+        )}
         <div class="battle-bottom">
           <div class="energy-orb" title="灵气">{b.player.energy}/{run.energyMax}</div>
           <PotionBar run={run} onUse={usePotion} />
-          <button class="endturn" onClick={() => { setSelected(null); dispatch({ t: 'END_TURN' }); }}>结束回合</button>
+          <button
+            class={`endturn ${!anyPlayable && !choice ? 'attention' : ''}`}
+            onClick={() => { setSelected(null); dispatch({ t: 'END_TURN' }); }}
+          >
+            结束回合
+          </button>
         </div>
-        {selectedCard && needsTarget(selectedCard.cardId) && !getCard(selectedCard.cardId).base.aoe && (
-          <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--zhusha)' }}>点选目标敌人</div>
-        )}
-        {potionTarget && (
-          <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--zhusha)' }}>选择丹药目标</div>
-        )}
       </div>
+
+      {guideStep < GUIDE_STEPS.length && !choice && (
+        <div class="guide-toast">
+          <span class="guide-num">{guideStep + 1}/{GUIDE_STEPS.length}</span>
+          <span class="guide-text">{GUIDE_STEPS[guideStep]}</span>
+          <button class="guide-ok" onClick={advanceGuide}>知道了</button>
+        </div>
+      )}
+
+      {showWuxing && (
+        <div class="overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowWuxing(false); }}>
+          <div class="panel">
+            <h3>五行速查</h3>
+            <div class="wuxing-sheet">
+              <p><b>相生（连招顺序）</b>：木 → 火 → 土 → 金 → 水 → 木</p>
+              <p>按顺序打出相生的牌触发【行云流水】：本牌效果 +25%，返还 1 灵气（每回合上限 2）。连续触发 4 次为【五行周天】：抽 2 张，下一张牌 0 费。无属性牌不打断连招。</p>
+              <p><b>相克（打克制属性的敌人，伤害 ×1.5 并附加异常）</b></p>
+              <p>金克木 → 破甲（敌人无法获得护体）<br />木克土 → 缠缚（敌人下次攻击减伤）<br />土克水 → 滞涩（敌人行动延迟 1 回合）<br />水克火 → 熄灭（移除敌人 1 层增益）<br />火克金 → 熔穿（附加 3 层灼烧）</p>
+              <p><b>操作</b>：点选手牌后，攻击牌点敌人释放；其他牌再点一次打出。敌人头顶为下回合意图，🗡 数字可用护体抵挡。</p>
+            </div>
+            <div style={{ textAlign: 'center' }}><button onClick={() => setShowWuxing(false)}>关闭</button></div>
+          </div>
+        </div>
+      )}
 
       {b.log.length > 0 && <div class="battle-log">{b.log[b.log.length - 1]}</div>}
 

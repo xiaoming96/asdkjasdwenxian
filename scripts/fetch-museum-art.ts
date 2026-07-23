@@ -124,14 +124,22 @@ async function queryMet(q: string, cap = 25): Promise<Artwork[]> {
   return out;
 }
 
-/** 统一做旧 LUT：降饱和、暖纸色、轻暗角（§14.1 统一调色） */
+/** 背景做旧 LUT：降饱和、暖纸色、轻暗角（§14.1 统一调色） */
 const AGING_FILTER =
   'eq=saturation=0.74:contrast=0.98:brightness=0.03,' +
   'colorbalance=rm=0.04:gm=0.01:bm=-0.05,' +
   'vignette=PI/9:mode=forward';
 
-function processImage(src: string, dest: string, w: number, h: number, xShift = 0.5, insetPct = 0) {
-  // 可选先裁掉四周装裱边，再覆盖裁切到 w:h，最后做旧
+/** 卡面 LUT：小尺寸展示，提亮提对比、不加暗角，保证在 100px 宽下画面仍清晰 */
+const CARD_FILTER =
+  'eq=saturation=0.92:contrast=1.08:brightness=0.04,' +
+  'colorbalance=rm=0.03:gm=0.0:bm=-0.04';
+
+function processImage(
+  src: string, dest: string, w: number, h: number,
+  xShift = 0.5, insetPct = 0, filter = AGING_FILTER,
+) {
+  // 可选先裁掉四周装裱边，再覆盖裁切到 w:h，最后统一调色
   const inset = insetPct > 0
     ? `crop=iw*${(1 - insetPct * 2).toFixed(2)}:ih*${(1 - insetPct * 2).toFixed(2)},`
     : '';
@@ -139,7 +147,7 @@ function processImage(src: string, dest: string, w: number, h: number, xShift = 
     inset +
     `scale=${w}:${h}:force_original_aspect_ratio=increase,` +
     `crop=${w}:${h}:(iw-${w})*${xShift}:(ih-${h})*0.28,` +
-    AGING_FILTER;
+    filter;
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', vf, '-quality', '80', dest]);
 }
 
@@ -208,7 +216,8 @@ async function main() {
       const xShift = [0.5, 0.15, 0.85, 0.3, 0.7][reuseRound % 5];
       const dest = `public/assets/cardart/${card.id}.webp`;
       try {
-        processImage(raw, dest, 512, 640, xShift);
+        // 卡面裁得更紧（裁掉 8% 边缘装裱/留白），用提亮 LUT
+        processImage(raw, dest, 512, 640, xShift, 0.08, CARD_FILTER);
       } catch {
         console.warn(`  ! ${card.id} 图像处理失败`);
         continue;

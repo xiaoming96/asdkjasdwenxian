@@ -22,8 +22,8 @@
 | Brush Holder with Figures in Landscape and Poetic Inscription by Wang Meilin from Jiading | Wang Meilin (Chinese, active c. 1825) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1988.75 |
 | Bamboo, Rocks and Lonely Orchids | Zhao Mengfu (Chinese, 1254–1322) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1963.515 |
 | Brush with Carved Design | 佚名 | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1967.194 |
-| Ink Bamboo | 佚名 | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1982.138 |
 | Brush with Carved Designs | 佚名 | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1967.194.a |
+| Ink Bamboo | 佚名 | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1982.138 |
 | Brush with Carved Designs (brush cap) | 佚名 | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1967.194.b |
 | Bamboo in Snow | Hong Fan (Chinese, active late 1700s–early 1800s) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/2023.161 |
 | Clip for Paper with Sage Seated Under a Pine | Pu Zhongqian (Chinese, active 1600s) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1977.8 |
