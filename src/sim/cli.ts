@@ -16,20 +16,24 @@ interface SimResult {
   turns: number;
   battles: number;
   cause: string;
+  pickedCards: string[];
+  enemyLoss: Record<string, { loss: number; count: number }>;
 }
 
-function parseArgs(): { bots: BotKind; runs: number; ascension: number; seed: string; verbose: boolean } {
+function parseArgs(): { bots: BotKind; runs: number; ascension: number; seed: string; verbose: boolean; benchmark: boolean } {
   const args = process.argv.slice(2);
   const get = (name: string, dflt: string) => {
     const i = args.indexOf(`--${name}`);
     return i >= 0 && args[i + 1] ? args[i + 1] : dflt;
   };
+  const benchmark = args.includes('--benchmark'); // 基准种子集回归（§17）：固定种子可比对
   return {
     bots: (get('bots', 'greedy') as BotKind),
-    runs: parseInt(get('runs', '1000'), 10),
+    runs: parseInt(get('runs', benchmark ? '200' : '1000'), 10),
     ascension: parseInt(get('ascension', '0'), 10),
-    seed: get('seed', 'SIMBASE'),
+    seed: benchmark ? 'BENCH' : get('seed', 'SIMBASE'),
     verbose: args.includes('--verbose'),
+    benchmark,
   };
 }
 
@@ -42,10 +46,21 @@ export function simulateOne(seed: string, bots: BotKind, ascension: number): Sim
   let guard = 0;
   const GUARD_MAX = 20000;
 
+  // 分析数据（§12.3/§16.6）：每卡 pick、每敌人平均损血
+  const pickedCards: string[] = [];
+  const enemyLoss: Record<string, { loss: number; count: number }> = {};
+  let battleKey: string | null = null;
+  let hpBefore = 0;
+
   while (!run.over && guard < GUARD_MAX) {
     guard += 1;
     const action = botAction(run, bots, rng);
     if (!action) break;
+    // 记录卡牌 pick
+    if (action.t === 'PICK_REWARD_CARD' && action.index >= 0 && run.screen.kind === 'reward' && run.screen.cards) {
+      const pick = run.screen.cards[action.index];
+      if (pick) pickedCards.push(pick.cardId);
+    }
     const next = reduce(run, action, unlocked);
     if (next === run) {
       // 非法动作（Bot 决策与状态不一致）：强制兜底
@@ -55,6 +70,16 @@ export function simulateOne(seed: string, bots: BotKind, ascension: number): Sim
       if (n2 === run) break;
       run = n2;
       continue;
+    }
+    // 记录每敌人损血（战斗开始/结束边界）
+    if (!run.battle && next.battle) {
+      battleKey = [...new Set(next.battle.enemies.map((e) => e.enemyId))].join('+');
+      hpBefore = run.hp;
+    } else if (run.battle && !next.battle && battleKey) {
+      const rec = (enemyLoss[battleKey] ??= { loss: 0, count: 0 });
+      rec.loss += Math.max(0, hpBefore - next.hp);
+      rec.count += 1;
+      battleKey = null;
     }
     run = next;
   }
@@ -68,12 +93,14 @@ export function simulateOne(seed: string, bots: BotKind, ascension: number): Sim
     turns: run.flags['turnsTotal'] ?? 0,
     battles: run.stats.battles,
     cause: end?.cause ?? (guard >= GUARD_MAX ? '模拟超时' : '未结束'),
+    pickedCards,
+    enemyLoss,
   };
 }
 
 function main() {
-  const { bots, runs, ascension, seed, verbose } = parseArgs();
-  console.log(`《问长生》无头模拟器 · bot=${bots} runs=${runs} ascension=${ascension}`);
+  const { bots, runs, ascension, seed, verbose, benchmark } = parseArgs();
+  console.log(`《问长生》无头模拟器 · bot=${bots} runs=${runs} ascension=${ascension}${benchmark ? ' · 基准种子集' : ''}`);
   const start = Date.now();
   const results: SimResult[] = [];
   let errors = 0;
@@ -114,6 +141,44 @@ function main() {
   const top = [...causes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   console.log('死因排行:');
   for (const [cause, n] of top) console.log(`  ${n} × ${cause}`);
+
+  // 每卡 pick/win 相关性（§12.3：偏离均值 ±8% 标红人工复查）
+  const overallWin = wins / Math.max(1, results.length);
+  const pickStat = new Map<string, { picks: number; wins: number }>();
+  for (const r of results) {
+    for (const cardId of new Set(r.pickedCards)) {
+      const st = pickStat.get(cardId) ?? { picks: 0, wins: 0 };
+      st.picks += 1;
+      if (r.victory) st.wins += 1;
+      pickStat.set(cardId, st);
+    }
+  }
+  const flagged = [...pickStat.entries()]
+    .filter(([, s]) => s.picks >= 20)
+    .map(([id, s]) => ({ id, picks: s.picks, wr: s.wins / s.picks, dev: s.wins / s.picks - overallWin }))
+    .sort((a, b) => Math.abs(b.dev) - Math.abs(a.dev));
+  console.log('每卡 pick/win 偏离（样本 ≥20，前 12）:');
+  for (const f of flagged.slice(0, 12)) {
+    const mark = Math.abs(f.dev) >= 0.08 ? ' ⚠复查' : '';
+    console.log(`  ${f.id}: picks=${f.picks} 胜率=${(f.wr * 100).toFixed(1)}% 偏离=${(f.dev * 100).toFixed(1)}%${mark}`);
+  }
+
+  // 每敌人平均损血（前 12）
+  const lossAgg = new Map<string, { loss: number; count: number }>();
+  for (const r of results) {
+    for (const [k, v] of Object.entries(r.enemyLoss)) {
+      const st = lossAgg.get(k) ?? { loss: 0, count: 0 };
+      st.loss += v.loss;
+      st.count += v.count;
+      lossAgg.set(k, st);
+    }
+  }
+  const lossTop = [...lossAgg.entries()]
+    .filter(([, v]) => v.count >= 10)
+    .map(([k, v]) => ({ k, avg: v.loss / v.count, n: v.count }))
+    .sort((a, b) => b.avg - a.avg);
+  console.log('每敌人平均损血（场次 ≥10，前 12）:');
+  for (const l of lossTop.slice(0, 12)) console.log(`  ${l.k}: ${l.avg.toFixed(1)} 血/场（${l.n} 场）`);
 }
 
 main();

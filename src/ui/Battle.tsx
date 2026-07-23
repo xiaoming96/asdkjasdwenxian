@@ -140,9 +140,19 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
     const dy = ev.clientY - d.startY;
     const moved = d.moved || Math.hypot(dx, dy) > 9;
     const overLine = ev.clientY < playLineY();
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    // 磁吸换选（§13.3）：仍在手牌区横向滑动时，滑到哪张换选哪张
+    if (dy > -46) {
+      const slotEl = el?.closest?.('[data-cuid]') as HTMLElement | null;
+      const overUid = slotEl ? Number(slotEl.dataset['cuid']) : null;
+      if (overUid != null && overUid !== d.uid && b.hand.some((c) => c.uid === overUid)) {
+        setSelected(overUid);
+        updateDrag({ ...d, uid: overUid, dx, dy, moved, overLine: false, hoverEnemy: null });
+        return;
+      }
+    }
     // 悬停敌人检测（拖到敌人身上释放）
     let hoverEnemy: number | null = null;
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
     const enemyEl = el?.closest?.('[data-euid]') as HTMLElement | null;
     if (enemyEl) hoverEnemy = Number(enemyEl.dataset['euid']);
     updateDrag({ ...d, dx, dy, moved, overLine, hoverEnemy });
@@ -335,6 +345,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
             return (
               <div
                 key={c.uid}
+                data-cuid={c.uid}
                 class={`hand-slot ${isDrag ? 'dragging' : ''}`}
                 style={{ transform, zIndex: isDrag ? 30 : isSel ? 10 : undefined }}
                 onPointerDown={(ev) => onCardPointerDown(ev as unknown as PointerEvent, c.uid)}

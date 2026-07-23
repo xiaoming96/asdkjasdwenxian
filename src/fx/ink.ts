@@ -14,6 +14,27 @@ let flashAlpha = 0;
 let flashColor = '#fff';
 let raf = 0;
 
+// 祥云粒子层（§14.1：程序化祥云，主界面/地图缓慢漂浮）
+interface Cloud { x: number; y: number; w: number; speed: number; alpha: number }
+const clouds: Cloud[] = [];
+let cloudsOn = false;
+
+export function setAmbientClouds(on: boolean) {
+  if (on === cloudsOn) return;
+  cloudsOn = on;
+  if (on && clouds.length === 0) {
+    for (let i = 0; i < 6; i++) {
+      clouds.push({
+        x: (i * 631) % (window.innerWidth || 480),
+        y: 60 + ((i * 173) % 380),
+        w: 90 + ((i * 97) % 130),
+        speed: 0.08 + (i % 3) * 0.05,
+        alpha: 0.05 + (i % 3) * 0.02,
+      });
+    }
+  }
+}
+
 export function initFx(el: HTMLCanvasElement) {
   canvas = el;
   cx = el.getContext('2d');
@@ -33,6 +54,20 @@ function loop() {
   if (!canvas || !cx) return;
   cx.clearRect(0, 0, canvas.width, canvas.height);
   const dpr = devicePixelRatio;
+  // 祥云层：多个模糊椭圆缓慢横移
+  if (cloudsOn) {
+    for (const c of clouds) {
+      c.x += c.speed;
+      if (c.x > (canvas.width / dpr) + c.w) c.x = -c.w;
+      const grad = cx.createRadialGradient(c.x * dpr, c.y * dpr, 0, c.x * dpr, c.y * dpr, c.w * dpr);
+      grad.addColorStop(0, `rgba(255, 253, 246, ${c.alpha})`);
+      grad.addColorStop(1, 'rgba(255, 253, 246, 0)');
+      cx.fillStyle = grad;
+      cx.beginPath();
+      cx.ellipse(c.x * dpr, c.y * dpr, c.w * dpr, c.w * 0.38 * dpr, 0, 0, Math.PI * 2);
+      cx.fill();
+    }
+  }
   // 墨点
   for (const b of blots) {
     cx.globalAlpha = Math.max(0, b.alpha);

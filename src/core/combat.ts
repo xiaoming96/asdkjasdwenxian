@@ -130,9 +130,8 @@ export function startBattle(
       // 三重天以下不额外强化（占位：三重天 Boss 强化 = 额外 +10% 血）
     }
   }
-  if (run.ascension >= 3 && battleType === 'boss' && !isJiuchong) {
-    for (const e of b.enemies) { e.maxHp = Math.floor(e.maxHp * 1.1); e.hp = e.maxHp; }
-  }
+  // 三重天：Boss 强化模式=额外行为（§11.2），在各 Boss 行为处生效
+  run.flags['burnThisBattle'] = 0; // 五雷轰顶成就计数
 
   // 洗入牌库
   const shuffled = rngShuffle(run.rng, 'shuffle', run.deck.map((c) => ({ ...c })));
@@ -179,9 +178,11 @@ function spawnWave(run: RunState, index: number): EnemyState {
   if (run.ascension >= 9) hp = Math.floor(hp * 1.1);
   if (w.id === 'daolei' && run.flags['jujuexinmo']) hp = Math.max(1, hp - run.flags['jujuexinmo']);
   if (w.id === 'daolei' && run.ascension >= 9) hp += 80;
+  // 三重天强化：每道雷灵携 1 层罡气登场
+  const statuses: EnemyState['statuses'] = run.ascension >= 3 ? { gangqi: 1 } : {};
   return {
     uid: newUid(run), enemyId: w.id, name: `第${'一二三四五六七八九'[index]}道·${w.name}`,
-    element: w.element, hp, maxHp: hp, block: 0, statuses: {}, moveIndex: 0,
+    element: w.element, hp, maxHp: hp, block: 0, statuses, moveIndex: 0,
     intent: null, zhiseCd: 0, flags: { wave: index },
   };
 }
@@ -262,9 +263,11 @@ function addPlayerStatus(b: BattleState, id: StatusId, n: number) {
   if (b.player.statuses[id]! <= 0) delete b.player.statuses[id];
 }
 
-function addEnemyStatus(_run: RunState, b: BattleState, e: EnemyState, id: StatusId, n: number) {
+function addEnemyStatus(run: RunState, b: BattleState, e: EnemyState, id: StatusId, n: number) {
   if (id === 'zhuoshao') {
     n += powerN(b, 'lihuoxinjing'); // 离火心经：施加灼烧 +N
+    if (n > 0) run.flags['burnThisBattle'] = (run.flags['burnThisBattle'] ?? 0) + n; // 五雷轰顶
+    if ((run.flags['burnThisBattle'] ?? 0) >= 25) run.flags['ach_wulei'] = 1;
   }
   if (id === 'chanfu') {
     const cur = e.statuses.chanfu ?? 0;
@@ -434,6 +437,10 @@ function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
   }
   // 阴煞雷：死亡时施你 1 层虚弱
   if (e.enemyId === 'yinshalei') addPlayerStatus(b, 'xuruo', 1);
+  // 成就"身外化身"：相变后未掉血击杀心魔
+  if (e.enemyId === 'xinmo' && run.flags['xinmoPhaseHp'] !== undefined && run.hp >= run.flags['xinmoPhaseHp']) {
+    run.flags['ach_shenwai'] = 1;
+  }
 
   // 九重天劫：击杀当前雷灵立即进入下一道
   if (b.waveIndex >= 0 && e.flags['wave'] !== undefined) {
@@ -679,6 +686,14 @@ function enemyAct(run: RunState, b: BattleState, e: EnemyState) {
   const move = e.intent;
   if (!move) return;
 
+  // 固本（§4.5 双方通用）：敌方回合开始每层 +2 护体
+  const guben = e.statuses.guben ?? 0;
+  if (guben > 0) enemyGainBlock(e, guben * 2);
+
+  // 三重天强化：雷灵傀儡雷引附带 1 层固本（§11.2 Boss 额外行为）
+  if (run.ascension >= 3 && e.enemyId === 'leiling_kuilei' && move.id === 'leiyin') {
+    e.statuses.guben = (e.statuses.guben ?? 0) + 1;
+  }
   // 铜甲尸被动：每回合 +6 护体；每第 4 回合尸毒
   if (e.enemyId === 'tongjiashi') {
     enemyGainBlock(e, 6);
@@ -733,10 +748,12 @@ function enemyAct(run: RunState, b: BattleState, e: EnemyState) {
       dealEnemyAttack(run, b, e, dmg, 1);
       return finishMove(run, b, e, move);
     }
-    case 'kaowen': { // 道心拷问：弃 2 张手牌 或 受 14 伤
+    case 'kaowen': { // 道心拷问：弃 2 张手牌 或 受 14 伤（三重天强化：弃 3 / 受 18）
+      const hard = run.ascension >= 3;
       b.pendingChoice = {
         kind: 'dilemma', prompt: '心魔逼问："你的道，经得起舍弃吗？"',
-        options: ['弃 2 张手牌', '受 14 伤'], data: { discard: 2, damage: 14 },
+        options: [`弃 ${hard ? 3 : 2} 张手牌`, `受 ${hard ? 18 : 14} 伤`],
+        data: { discard: hard ? 3 : 2, damage: hard ? 18 : 14 },
       };
       return finishMove(run, b, e, move);
     }
@@ -767,8 +784,11 @@ function enemyAct(run: RunState, b: BattleState, e: EnemyState) {
       dealEnemyAttack(run, b, e, move.damage ?? 12, 1);
       return finishMove(run, b, e, move);
     }
-    case 'jielei': { // 雷灵傀儡劫雷
-      dealEnemyAttack(run, b, e, move.damage ?? 18, 1);
+    case 'jielei': { // 雷灵傀儡劫雷（三重天强化：+4 伤；成就"三劫齐渡"记录承伤）
+      const dmg = (move.damage ?? 18) + (run.ascension >= 3 ? 4 : 0);
+      const loss = dealEnemyAttack(run, b, e, dmg, 1);
+      if (loss > 0) run.flags['jieleiDirty'] = 1;
+      else run.flags['jieleiClean'] = (run.flags['jieleiClean'] ?? 0) + 1;
       return finishMove(run, b, e, move);
     }
     case 'tianfa': { // 灭雷天罚：护体承接 ≥10 则减半
@@ -829,6 +849,7 @@ function finishMove(run: RunState, b: BattleState, e: EnemyState, _move: EnemyMo
     if (!e.flags['phase2'] && e.hp <= e.maxHp / 2) {
       e.flags['phase2'] = 1;
       e.flags['charging'] = 2;
+      run.flags['xinmoPhaseHp'] = run.hp; // 成就"身外化身"：相变起点气血
       const z1 = makeEnemy(run, getEnemy('zhinian'));
       const z2 = makeEnemy(run, getEnemy('zhinian'));
       b.enemies.push(z1, z2);

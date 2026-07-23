@@ -375,6 +375,7 @@ export interface Profile {
   seenEnemies: string[];
   daohaoList: string[];
   totalDaoweiEarned: number;
+  winsByChar: Record<string, number>;
   settings: { music: number; sfx: number };
 }
 

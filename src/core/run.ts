@@ -39,6 +39,7 @@ export function newRun(
     removeCostBase: 75, usedEvents: [], uidCounter: 0, flags: {}, gongdeBattles: 0, over: false,
   };
   const chr = CHARACTERS[character] ?? CHARACTERS['jianxiu'];
+  run.flags[`char_${CHARACTERS[character] ? character : 'jianxiu'}`] = 1; // 角色标记（成就"飞升三次"）
   for (const id of chr.deck) run.deck.push(makeCard(run, id));
   if (dailyFlag) {
     run.flags[dailyFlag] = 1;

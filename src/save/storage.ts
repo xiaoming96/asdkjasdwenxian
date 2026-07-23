@@ -22,6 +22,7 @@ export function defaultProfile(): Profile {
     seenEnemies: [],
     daohaoList: [],
     totalDaoweiEarned: 0,
+    winsByChar: {},
     settings: { music: 0.6, sfx: 0.8 },
   };
 }

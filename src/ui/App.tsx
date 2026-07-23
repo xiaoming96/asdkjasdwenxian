@@ -10,7 +10,8 @@ import { settleRun } from '../save/profileLogic';
 import { dailySeed, dailyMutation } from '../data/daily';
 import { sfx, setSfxVolume } from '../audio/sfx';
 import { setBgmScene, setBgmVolume, unlockBgm, type BgmScene } from '../audio/bgm';
-import { initFx, stopFx, thunderFlash, inkSplash, goldRipple } from '../fx/ink';
+import { initFx, stopFx, thunderFlash, inkSplash, goldRipple, setAmbientClouds } from '../fx/ink';
+import { track } from '../save/analytics';
 import { HomeScreen, CodexScreen, ZhuanshiScreen, SettingsScreen, AchievementScreen } from './Meta';
 import { IntroScroll, ActTitle } from './Narrative';
 import { MapScreen } from './MapScreen';
@@ -74,6 +75,7 @@ export function App() {
       }
     }
     setBgmScene(s);
+    setAmbientClouds(s === 'menu' || s === 'map'); // 祥云粒子层（§14.1）
   }, [page, run]);
 
   function setProfile(p: Profile) {
@@ -89,18 +91,42 @@ export function App() {
     const next = reduce(prev, action, unlocked);
     if (next === prev) return;
 
-    // ---- 音效 / 特效钩子（对比前后状态） ----
+    // ---- 音效 / 特效 / 埋点 / 震动钩子（对比前后状态） ----
+    const vibrate = (pattern: number | number[]) => {
+      try { navigator.vibrate?.(pattern); } catch { /* 不支持则忽略 */ }
+    };
     try {
       const pb = prev.battle, nb = next.battle;
-      if (action.t === 'PLAY_CARD') sfx.playCard();
+      if (action.t === 'PLAY_CARD') {
+        sfx.playCard();
+        vibrate(10);
+        const played = pb?.hand.find((c) => c.uid === action.uid);
+        if (played) {
+          track('card_played', {
+            card: played.cardId,
+            liushui: !!(pb && nb && nb.liushuiCount > pb.liushuiCount),
+          });
+        }
+      }
+      if (action.t === 'CHOOSE_NODE') track('node_enter', { node: action.node, floor: next.floor, act: next.act });
+      if (action.t === 'PICK_REWARD_CARD' && prev.screen.kind === 'reward' && prev.screen.cards) {
+        track('card_pick', {
+          offered: prev.screen.cards.map((c) => c.cardId).join(','),
+          picked: action.index >= 0 ? prev.screen.cards[action.index]?.cardId ?? 'skip' : 'skip',
+        });
+      }
+      if (pb && !nb && !next.over) {
+        track('battle_end', { turns: pb.turnsTotal, hp: next.hp, type: pb.battleType });
+      }
       if (action.t === 'USE_POTION') sfx.potion();
       if (action.t === 'END_TURN') sfx.turnStart();
       if (pb && nb) {
         if (nb.liushuiCount > pb.liushuiCount && nb.xingwei) {
           sfx.liushui(nb.xingwei);
+          vibrate(16);
           goldRipple(window.innerWidth / 2, window.innerHeight * 0.55);
         }
-        if (nb.zhoutianTotal > pb.zhoutianTotal) sfx.zhoutian();
+        if (nb.zhoutianTotal > pb.zhoutianTotal) { sfx.zhoutian(); vibrate([20, 40, 20]); }
         const prevHp = pb.enemies.reduce((s, e) => s + Math.max(0, e.hp), 0);
         const nextHp = nb.enemies.reduce((s, e) => s + Math.max(0, e.hp), 0);
         if (nextHp < prevHp && action.t === 'PLAY_CARD') {
@@ -133,6 +159,13 @@ export function App() {
     if (next.over && !settledRef.current) {
       settledRef.current = true;
       const victory = next.screen.kind === 'end' && next.screen.victory;
+      track('run_end', {
+        result: victory ? 'win' : 'lose',
+        floor: next.floor,
+        act: next.act,
+        score: next.screen.kind === 'end' ? next.screen.score : 0,
+        deckSize: next.deck.length,
+      });
       const p2 = settleRun(profile, next, victory);
       setProfile(p2);
       clearRun();
@@ -148,6 +181,7 @@ export function App() {
     saveRunNow(r);
     setPage('run');
     setShowIntro(true); // 开局卷轴叙事（§3.3）
+    track('run_start', { seed, ascension, character, daily });
     sfx.breakthrough();
   }
 

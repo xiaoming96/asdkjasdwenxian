@@ -3,7 +3,9 @@
  */
 import type { Profile, RunState } from '../core/types';
 import { computeDaowei } from '../core/run';
-import { getCard } from '../data/cards';
+import { CARDS, getCard } from '../data/cards';
+import { RELICS } from '../data/relics';
+import { ENEMIES } from '../data/enemies';
 import { UNLOCKS } from '../data/unlocks';
 
 /** 结算一局：道行入账 + 成就 + 图鉴 */
@@ -51,6 +53,24 @@ export function settleRun(profile: Profile, run: RunState, victory: boolean): Pr
   if (run.stats.potionsUsed >= 10) unlock('yaodaobingchu');
   if (p.runsTotal >= 10) unlock('zhuanshichongxiu');
   if (p.runsTotal >= 100) unlock('wendaobainian');
+  // 战斗内追踪的成就旗标
+  if ((run.flags['jieleiClean'] ?? 0) >= 3 && !run.flags['jieleiDirty']) unlock('sanjieqidu');
+  if (run.flags['ach_wulei']) unlock('wuleihongding');
+  if (run.flags['ach_shenwai']) unlock('shenwaihuashen');
+  // 图鉴集齐
+  if (p.seenRelics.length >= Object.keys(RELICS).length) unlock('qiankunzaishou');
+  const cardTotal = Object.values(CARDS).filter((c) => c.rarity !== 'curse').length;
+  if (p.seenCards.length >= cardTotal) unlock('wanxianggengxin');
+  const enemyTotal = Object.keys(ENEMIES).length;
+  if (p.seenEnemies.length >= enemyTotal) unlock('xiangyaochumo');
+  // 飞升三次（3 角色各通关）与每日天机
+  if (victory) {
+    const charKey = Object.keys(run.flags).find((k) => k.startsWith('char_'))?.slice(5) ?? 'jianxiu';
+    p.winsByChar[charKey] = (p.winsByChar[charKey] ?? 0) + 1;
+    if (Object.keys(p.winsByChar).length >= 3) unlock('feishengsanci');
+    // 天机不可泄露：本地版以"每日天机通关"替代（前 10% 需后端榜单，P1）
+    if (Object.keys(run.flags).some((k) => k.startsWith('daily'))) unlock('tianjibukexie');
+  }
   return p;
 }
 

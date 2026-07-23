@@ -10,6 +10,7 @@ import { dailyMutation, todayKey } from '../data/daily';
 import { buyUnlock } from '../save/profileLogic';
 import { sfx, setSfxVolume } from '../audio/sfx';
 import { setBgmVolume } from '../audio/bgm';
+import { track } from '../save/analytics';
 import { enemyArt, cardArtSource } from './art';
 
 // ---------- 主界面 ----------
@@ -211,7 +212,7 @@ export function ZhuanshiScreen(props: { profile: Profile; setProfile: (p: Profil
                 disabled={profile.daowei < u.cost}
                 onClick={() => {
                   const p2 = buyUnlock(profile, u.id);
-                  if (p2) { sfx.breakthrough(); props.setProfile(p2); }
+                  if (p2) { sfx.breakthrough(); track('meta_unlock', { node: u.id }); props.setProfile(p2); }
                 }}
               >
                 解锁
