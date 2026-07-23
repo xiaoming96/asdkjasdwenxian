@@ -15,7 +15,14 @@ pnpm test           # 单元测试（vitest）
 pnpm lint           # ESLint（含"禁止 Math.random"规则，策划案 §16.4）
 pnpm build          # 生产构建（tsc + vite）
 pnpm sim -- --bots greedy --runs 1000 --ascension 0   # 无头模拟器（§16.6）
+npx tsx scripts/fetch-museum-art.ts   # 重跑博物馆古画素材管线（产物已入库，一般无需执行）
 ```
+
+## 美术素材来源
+
+- 卡面主图（80 张，逐卡独立）与主界面/各幕背景：克利夫兰艺术博物馆（CC0）与大都会艺术博物馆（Open Access）公有领域古画，经统一做旧 LUT 处理；逐项登记于 `public/assets/CREDITS.md`（授权台账），游戏内设置页有"素材署名"入口。
+- 敌人立绘（40 张）与劫战雷云背景：原创生成素材（博物馆藏品中无成套妖怪形象，符合"需求来源没有且网上找不到免费合适的才绘制"规则）。
+- 音效：Web Audio 代码合成（行云流水按五声宫商角徵羽对应五行）。
 
 ## 技术栈
 
@@ -40,7 +47,8 @@ src/
   audio/     Web Audio 合成音效（行云流水按五声宫商角徵羽对应五行）
   save/      localStorage 存档与 schema 迁移
 scripts/
-  make-demo-save.ts  生成第三幕九重天劫演示存档（写入 public/dev_jie_run.json）
+  make-demo-save.ts     生成第三幕九重天劫演示存档（写入 public/dev_jie_run.json）
+  fetch-museum-art.ts   博物馆 CC0 古画拉取/裁切/做旧管线（产出卡面、背景、授权台账）
 ```
 
 ## 平衡现状（对照策划案 §12.3 门槛）
