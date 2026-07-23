@@ -189,33 +189,57 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 .enemy.targeted .enemy-figure { box-shadow: 0 0 0 3px var(--zhusha); }
 .enemy.dead { opacity: 0.2; pointer-events: none; filter: grayscale(1); }
 .enemy-intent { font-size: 13px; background: rgba(43,43,43,0.85); color: #f4efe6; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+/* 敌人立绘：去卡框，水墨晕染遮罩让画像"洇"在战场上（§14.1 立绘感） */
 .enemy-figure {
-  width: 84px; height: 84px; border-radius: 10px;
-  background: rgba(43, 43, 43, 0.08);
-  border: 2px solid rgba(43, 43, 43, 0.55);
+  width: 104px; height: 104px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 40px;
+  font-size: 44px;
   animation: breathe 2.8s ease-in-out infinite;
-  overflow: hidden;
-  box-shadow: 2px 3px 8px rgba(43, 43, 43, 0.25);
+  position: relative;
+  z-index: 1;
 }
 .enemy-figure img {
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
+  -webkit-mask-image: radial-gradient(ellipse 72% 68% at 50% 46%, #000 48%, transparent 82%);
+  mask-image: radial-gradient(ellipse 72% 68% at 50% 46%, #000 48%, transparent 82%);
 }
-.enemy.boss .enemy-figure { width: 118px; height: 118px; border-width: 2.5px; border-color: var(--zhusha); }
-.enemy.elite .enemy-figure { width: 98px; height: 98px; border-color: var(--liujin); }
-/* 待选目标：红光脉冲，明确"点这里" */
-.enemy.targetable .enemy-figure {
-  border-color: var(--zhusha);
-  box-shadow: 0 0 0 3px rgba(195, 39, 43, 0.35), 0 0 16px rgba(195, 39, 43, 0.55);
+/* 浅色战场：正片叠底让立绘纸底消失，只留墨迹（真立绘感）；劫战深底不适用 */
+.battle:not(.jie-bg) .enemy-figure img { mix-blend-mode: multiply; }
+/* 劫战深底：收紧遮罩，光晕更聚拢，避免方形亮块 */
+.battle.jie-bg .enemy-figure img {
+  -webkit-mask-image: radial-gradient(ellipse 60% 58% at 50% 46%, #000 38%, transparent 70%);
+  mask-image: radial-gradient(ellipse 60% 58% at 50% 46%, #000 38%, transparent 70%);
+}
+/* 脚下墨晕投影：立在地上的感觉 */
+.enemy-ground {
+  position: absolute;
+  bottom: -4px; left: 50%;
+  transform: translateX(-50%);
+  width: 64%; height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(43, 43, 43, 0.3), transparent 70%);
+  z-index: 0;
+  pointer-events: none;
+}
+.enemy.elite .enemy-ground { background: radial-gradient(ellipse, rgba(184, 134, 11, 0.4), transparent 70%); }
+.enemy.boss .enemy-ground { background: radial-gradient(ellipse, rgba(195, 39, 43, 0.38), transparent 70%); }
+.enemy.boss .enemy-figure { width: 148px; height: 148px; }
+.enemy.elite .enemy-figure { width: 122px; height: 122px; }
+/* 待选目标：脚下红色光环脉冲，明确"点这里" */
+.enemy.targetable .enemy-ground {
+  width: 86%; height: 16px;
+  background: radial-gradient(ellipse, rgba(195, 39, 43, 0.55), rgba(195, 39, 43, 0.15) 60%, transparent 75%);
+  box-shadow: 0 0 14px rgba(195, 39, 43, 0.5);
   animation: targetPulse 0.9s infinite;
-  cursor: pointer;
+}
+.enemy.targetable .enemy-figure img {
+  filter: drop-shadow(0 0 6px rgba(195, 39, 43, 0.65));
 }
 @keyframes targetPulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(195, 39, 43, 0.3), 0 0 12px rgba(195, 39, 43, 0.4); }
-  50% { box-shadow: 0 0 0 5px rgba(195, 39, 43, 0.55), 0 0 22px rgba(195, 39, 43, 0.75); }
+  0%, 100% { opacity: 0.75; transform: translateX(-50%) scaleX(1); }
+  50% { opacity: 1; transform: translateX(-50%) scaleX(1.12); }
 }
 @keyframes breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 .enemy.hitflash .enemy-figure { animation: hitflash 0.18s; }
@@ -299,10 +323,13 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 }
 
 /* 拖拽悬停在敌人上：金色强调 */
-.enemy.drag-hover .enemy-figure {
-  border-color: var(--liujin);
-  box-shadow: 0 0 0 5px rgba(184, 134, 11, 0.55), 0 0 24px rgba(184, 134, 11, 0.8);
-  transform: scale(1.06);
+.enemy.drag-hover .enemy-figure { transform: scale(1.08); }
+.enemy.drag-hover .enemy-figure img {
+  filter: drop-shadow(0 0 10px rgba(184, 134, 11, 0.95));
+}
+.enemy.drag-hover .enemy-ground {
+  background: radial-gradient(ellipse, rgba(184, 134, 11, 0.65), rgba(184, 134, 11, 0.2) 60%, transparent 75%);
+  box-shadow: 0 0 18px rgba(184, 134, 11, 0.6);
 }
 .wcard {
   width: 108px; height: 166px;

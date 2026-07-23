@@ -260,6 +260,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
               {enemyArt(e.enemyId)
                 ? <img src={enemyArt(e.enemyId)!} alt={e.name} draggable={false} />
                 : (ENEMY_ICON[e.enemyId] ?? '👾')}
+              <div class="enemy-ground" />
             </div>
             <div class="enemy-name"><ElBadge el={e.element} /> {e.name}</div>
             <div class="hpbar"><div style={{ width: `${(e.hp / e.maxHp) * 100}%` }} /></div>
