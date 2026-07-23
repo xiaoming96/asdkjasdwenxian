@@ -84,6 +84,9 @@ export function MapScreen(props: { run: RunState; dispatch: (a: Action) => void 
       {hint && (
         <div class="map-hint">仙途须循路而行：只能选带红光的相邻节点</div>
       )}
+      {run.floor < 0 && (
+        <div class="map-hint start-cue">↓ 点击最下方带红光的节点，从此启程</div>
+      )}
     </div>
   );
 }
