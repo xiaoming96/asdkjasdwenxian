@@ -1,5 +1,5 @@
 /** 地图界面（策划案 §13.2 #2：手卷式纵向滚动） */
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Action, MapNode, NodeType, RunState } from '../core/types';
 import { selectableNodes } from '../core/map';
 import { actBg } from './art';
@@ -19,6 +19,19 @@ export function MapScreen(props: { run: RunState; dispatch: (a: Action) => void 
   const selectable = selectableNodes(run);
   const hasLuopan = run.relics.includes('luopan');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [hint, setHint] = useState(false);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function tapNode(n: MapNode) {
+    if (selectable.includes(n.id)) {
+      dispatch({ t: 'CHOOSE_NODE', node: n.id });
+      return;
+    }
+    // 不可达节点：给出提示（只能走与当前位置相连的下一层）
+    setHint(true);
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setHint(false), 1800);
+  }
 
   useEffect(() => {
     // 初始滚动到当前位置附近（底部为起点）
@@ -59,7 +72,7 @@ export function MapScreen(props: { run: RunState; dispatch: (a: Action) => void 
               <div
                 key={n.id}
                 class={nodeCls(n)}
-                onClick={() => selectable.includes(n.id) && dispatch({ t: 'CHOOSE_NODE', node: n.id })}
+                onClick={() => tapNode(n)}
               >
                 {NODE_ICON[display(n)]}
                 <span class="node-label">{NODE_LABEL[display(n)]}</span>
@@ -68,6 +81,9 @@ export function MapScreen(props: { run: RunState; dispatch: (a: Action) => void 
           </div>
         ))}
       </div>
+      {hint && (
+        <div class="map-hint">仙途须循路而行：只能选带红光的相邻节点</div>
+      )}
     </div>
   );
 }

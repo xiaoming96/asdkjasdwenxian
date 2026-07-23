@@ -137,6 +137,19 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 .map-node.visited { opacity: 0.45; }
 .map-node .node-label { position: absolute; bottom: -18px; font-size: 11px; color: var(--dailan); white-space: nowrap; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.map-hint {
+  position: fixed;
+  left: 50%; bottom: 90px;
+  transform: translateX(-50%);
+  background: rgba(43, 43, 43, 0.88);
+  color: var(--paper);
+  font-size: 13.5px;
+  padding: 9px 16px;
+  border-radius: 6px;
+  z-index: 60;
+  animation: fadein 0.25s;
+  white-space: nowrap;
+}
 
 /* ---------- 战斗 ---------- */
 .battle { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
