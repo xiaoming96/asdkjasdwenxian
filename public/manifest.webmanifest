@@ -1,0 +1,12 @@
+{
+  "name": "问长生",
+  "short_name": "问长生",
+  "description": "修仙题材单机肉鸽卡牌构筑游戏",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4EFE6",
+  "theme_color": "#F4EFE6",
+  "lang": "zh-CN",
+  "icons": []
+}
