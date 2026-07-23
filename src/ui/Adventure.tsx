@@ -253,6 +253,7 @@ export function EndView(props: {
   return (
     <div class="screen-page fade-in">
       <div class="end-scroll">
+        <div class="end-seal">{s.victory ? '飞升' : '道消'}</div>
         <h2>{s.victory ? '白 日 飞 升' : '生 平 卷 轴'}</h2>
         {s.daohao && <div class="daohao">道号 · {s.daohao}</div>}
         <div class="sub">{s.cause}</div>

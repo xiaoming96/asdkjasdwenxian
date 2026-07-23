@@ -6,6 +6,7 @@ import { getCard } from '../data/cards';
 import { getPotion } from '../data/potions';
 import { generates, SHENG, ELEMENT_NAME, ELEMENTS, type Element } from '../core/wuxing';
 import { CardView, ElBadge, PotionBar, DeckModal } from './components';
+import { enemyArt, actBg } from './art';
 
 const STATUS_NAME: Record<string, string> = {
   gangqi: '罡气', guben: '固本', huichun: '回春', zhuoshao: '灼烧', zhangdu: '瘴毒',
@@ -124,16 +125,23 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   const choice = b.pendingChoice;
 
   return (
-    <div class={`battle fade-in ${isJie ? 'jie-bg' : ''}`}>
+    <div
+      class={`battle fade-in ${isJie ? 'jie-bg' : ''}`}
+      style={isJie ? undefined : { backgroundImage: `linear-gradient(rgba(244,239,230,0.55), rgba(244,239,230,0.4) 40%, rgba(244,239,230,0.88) 62%), url(${actBg(run.act)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }}
+    >
       <div class="enemy-zone">
         {b.enemies.map((e) => (
           <div
             key={e.uid}
-            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${selectedCard || potionTarget ? 'targeted-hint' : ''}`}
+            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''}`}
             onClick={() => e.hp > 0 && tapEnemy(e)}
           >
             <div class="enemy-intent">{intentText(run, e)}</div>
-            <div class="enemy-figure">{ENEMY_ICON[e.enemyId] ?? '👾'}</div>
+            <div class="enemy-figure">
+              {enemyArt(e.enemyId)
+                ? <img src={enemyArt(e.enemyId)!} alt={e.name} draggable={false} />
+                : (ENEMY_ICON[e.enemyId] ?? '👾')}
+            </div>
             <div class="enemy-name"><ElBadge el={e.element} /> {e.name}</div>
             <div class="hpbar"><div style={{ width: `${(e.hp / e.maxHp) * 100}%` }} /></div>
             <div class="enemy-hp-num">{e.hp}/{e.maxHp}{e.block > 0 ? ` 🛡${e.block}` : ''}</div>

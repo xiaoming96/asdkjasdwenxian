@@ -160,13 +160,22 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 .enemy.dead { opacity: 0.2; pointer-events: none; filter: grayscale(1); }
 .enemy-intent { font-size: 13px; background: rgba(43,43,43,0.85); color: #f4efe6; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
 .enemy-figure {
-  width: 64px; height: 64px; border-radius: 12px;
+  width: 84px; height: 84px; border-radius: 10px;
   background: rgba(43, 43, 43, 0.08);
   border: 2px solid rgba(43, 43, 43, 0.55);
   display: flex; align-items: center; justify-content: center;
-  font-size: 34px;
+  font-size: 40px;
   animation: breathe 2.8s ease-in-out infinite;
+  overflow: hidden;
+  box-shadow: 2px 3px 8px rgba(43, 43, 43, 0.25);
 }
+.enemy-figure img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.enemy.boss .enemy-figure { width: 118px; height: 118px; border-width: 2.5px; border-color: var(--zhusha); }
+.enemy.elite .enemy-figure { width: 98px; height: 98px; border-color: var(--liujin); }
 @keyframes breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 .enemy.hitflash .enemy-figure { animation: hitflash 0.18s; }
 @keyframes hitflash { 0% { background: #fff; } 100% { background: rgba(43,43,43,0.08); } }
@@ -211,22 +220,38 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   justify-content: center;
   align-items: flex-end;
   padding: 0 4px;
-  min-height: 172px;
+  min-height: 188px;
 }
 .wcard {
-  width: 96px; height: 142px;
+  width: 104px; height: 160px;
   border-radius: 8px;
   border: 2px solid var(--ink);
   background: #fffdf7;
   display: flex; flex-direction: column;
-  padding: 5px 6px;
+  padding: 4px 5px;
   font-size: 11px;
   position: relative;
   transition: transform 0.16s, box-shadow 0.16s, margin 0.16s;
   flex-shrink: 1;
-  margin: 0 -14px;
+  margin: 0 -16px;
   box-shadow: 0 2px 6px rgba(43,43,43,0.25);
   user-select: none;
+}
+.wcard .c-art {
+  height: 54px;
+  margin: 3px -1px 2px;
+  border-radius: 4px;
+  background-size: cover;
+  background-position: center 30%;
+  border: 1px solid rgba(43, 43, 43, 0.3);
+  position: relative;
+  flex-shrink: 0;
+}
+.wcard .c-art .c-type-tag {
+  position: absolute; right: 2px; bottom: 2px;
+  font-size: 9px; color: #fffdf7;
+  background: rgba(43, 43, 43, 0.72);
+  border-radius: 3px; padding: 0 4px;
 }
 .hand-cards .wcard { cursor: pointer; }
 .hand-cards .wcard:hover { transform: translateY(-14px); z-index: 3; }
@@ -249,10 +274,23 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 .wcard .c-el .el-badge { font-size: 10px; padding: 1px 3px; }
 .wcard .c-type { color: var(--dailan); font-size: 10px; margin: 1px 0; }
 .wcard .c-text { flex: 1; line-height: 1.35; overflow: hidden; }
-.wcard.rare-rare { border-color: var(--dailan); }
-.wcard.rare-epic { border-color: var(--zhusha); }
-.wcard.rare-legendary { border-color: var(--liujin); border-width: 2.5px; }
+/* 稀有度卡框（§14.1：墨/黛蓝/朱砂/鎏金） */
+.wcard.rare-rare { border-color: var(--dailan); box-shadow: 0 2px 6px rgba(74,85,104,0.35), inset 0 0 0 1px rgba(74,85,104,0.35); }
+.wcard.rare-epic { border-color: var(--zhusha); box-shadow: 0 2px 6px rgba(195,39,43,0.3), inset 0 0 0 1px rgba(195,39,43,0.35); }
+.wcard.rare-legendary {
+  border-color: var(--liujin); border-width: 2.5px;
+  box-shadow: 0 2px 10px rgba(184,134,11,0.45), inset 0 0 0 1.5px rgba(184,134,11,0.5);
+}
+.wcard.rare-curse { border-color: #3a2a3a; background: #efe6e8; filter: saturate(0.8); }
 .wcard.upgraded .c-name { color: var(--zhusha); }
+/* 角花装饰 */
+.wcard::after {
+  content: '';
+  position: absolute; inset: 2px;
+  border-radius: 6px;
+  border: 1px solid rgba(43, 43, 43, 0.12);
+  pointer-events: none;
+}
 
 .battle-bottom {
   display: flex; align-items: center; justify-content: space-between;
@@ -368,6 +406,17 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   border: 2px solid var(--ink); border-radius: 6px;
   width: 100%; padding: 22px 18px; text-align: center;
 }
+.end-scroll { position: relative; }
+.end-scroll .end-seal {
+  position: absolute; top: 14px; right: 14px;
+  background: var(--zhusha); color: #fff;
+  writing-mode: vertical-rl;
+  font-size: 15px; letter-spacing: 3px;
+  padding: 7px 5px; border-radius: 4px;
+  transform: rotate(6deg);
+  box-shadow: 0 1px 5px rgba(195, 39, 43, 0.5);
+  opacity: 0.92;
+}
 .end-scroll .daohao { font-size: 30px; color: var(--zhusha); letter-spacing: 6px; margin: 10px 0; }
 .end-stats { display: flex; flex-direction: column; gap: 6px; font-size: 14px; margin: 14px 0; }
 .end-stats div { display: flex; justify-content: space-between; border-bottom: 1px dashed rgba(43,43,43,0.2); padding-bottom: 4px; }
@@ -386,6 +435,14 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 .codex-item.lockedx { opacity: 0.4; }
 .codex-item .ci-name { font-weight: 700; white-space: nowrap; }
 .codex-item .ci-text { color: var(--dailan); font-size: 12.5px; }
+.codex-item .ci-portrait {
+  width: 46px; height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1.5px solid rgba(43, 43, 43, 0.4);
+  flex-shrink: 0;
+}
+.codex-item { align-items: center; }
 
 /* 转世解锁树 */
 .unlock-item { display: flex; align-items: center; gap: 10px; width: 100%; background: rgba(255,252,245,0.85); border: 1px solid rgba(43,43,43,0.25); border-radius: 8px; padding: 10px 12px; font-size: 14px; }

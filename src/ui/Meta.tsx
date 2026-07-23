@@ -9,6 +9,7 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { dailyMutation, todayKey } from '../data/daily';
 import { buyUnlock } from '../save/profileLogic';
 import { sfx, setSfxVolume } from '../audio/sfx';
+import { enemyArt } from './art';
 
 // ---------- 主界面 ----------
 
@@ -154,11 +155,14 @@ export function CodexScreen(props: { profile: Profile; onBack: () => void }) {
         })}
         {tab === 'enemies' && Object.values(ENEMIES).filter((e) => e.id !== 'baiwuchang').map((e) => (
           <div key={e.id} class="codex-item">
-            <span class="ci-name">{e.name}</span>
-            <span class="ci-text">
-              {e.tier === 'boss' ? '天劫' : e.tier === 'elite' ? '精英' : `第${['一', '二', '三'][e.act - 1]}幕`} · 气血 {e.hp}
-              {enemyNotes[e.id] ? ` · ${enemyNotes[e.id]}` : ''}
-            </span>
+            {enemyArt(e.id) && <img class="ci-portrait" src={enemyArt(e.id)!} alt={e.name} loading="lazy" />}
+            <div>
+              <div class="ci-name">{e.name}</div>
+              <div class="ci-text">
+                {e.tier === 'boss' ? '天劫' : e.tier === 'elite' ? '精英' : `第${['一', '二', '三'][e.act - 1]}幕`} · 气血 {e.hp}
+                {enemyNotes[e.id] ? ` · ${enemyNotes[e.id]}` : ''}
+              </div>
+            </div>
           </div>
         ))}
       </div>

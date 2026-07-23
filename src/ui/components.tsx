@@ -4,6 +4,7 @@ import type { CardInstance, RunState } from '../core/types';
 import { getCard } from '../data/cards';
 import { getPotion } from '../data/potions';
 import { ELEMENT_NAME, type CardElement } from '../core/wuxing';
+import { cardArt } from './art';
 
 export const EL_COLOR: Record<CardElement, string> = {
   metal: 'var(--el-metal)',
@@ -57,7 +58,10 @@ export function CardView(props: {
         <span class="c-name">{def.name}{props.card.upgraded ? '+' : ''}</span>
         <span class="c-el"><ElBadge el={def.element} /></span>
       </div>
-      <div class="c-type">{TYPE_NAME[def.type]} · {RARITY_NAME[def.rarity]}</div>
+      <div class="c-art" style={{ backgroundImage: `url(${cardArt(def.element, def.type === 'curse')})` }}>
+        <span class="c-type-tag">{TYPE_NAME[def.type]}</span>
+      </div>
+      <div class="c-type">{RARITY_NAME[def.rarity]}</div>
       <div class="c-text">{text}</div>
     </div>
   );

@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { Action, MapNode, NodeType, RunState } from '../core/types';
 import { selectableNodes } from '../core/map';
+import { actBg } from './art';
 
 const NODE_ICON: Record<NodeType, string> = {
   battle: '⚔', elite: '💀', event: '🏮', shop: '🛖', cave: '🧘', boss: '👑', unknown: '❓',
@@ -44,7 +45,11 @@ export function MapScreen(props: { run: RunState; dispatch: (a: Action) => void 
   }
 
   return (
-    <div class="map-scroll fade-in" ref={scrollRef}>
+    <div
+      class="map-scroll fade-in"
+      ref={scrollRef}
+      style={{ backgroundImage: `linear-gradient(rgba(244,239,230,0.82), rgba(244,239,230,0.86)), url(${actBg(run.act)})`, backgroundSize: 'cover', backgroundPosition: 'center top', backgroundAttachment: 'local' }}
+    >
       <div class="map-act-title">{ACT_TITLES[run.act - 1]}</div>
       <div class="map-act-sub">「{ACT_QUOTES[run.act - 1]}」 · 种子 {run.seed}</div>
       <div class="map-layers">
