@@ -13,3 +13,4 @@
 - 端到端调试终局 Boss：`npx tsx scripts/make-demo-save.ts` 生成 `public/dev_jie_run.json`（已 gitignore），随后在浏览器控制台执行 `localStorage.setItem('wcs_run', await fetch('/dev_jie_run.json').then(r => r.text())); location.reload();` 并点击"续前缘"，即可直接进入第三幕九重天劫战斗。
 - 存档在 localStorage：`wcs_profile`（局外进度）与 `wcs_run`（当前局）。测试时用 `localStorage.clear()` 重置到全新状态。
 - 战斗内出牌交互：攻击牌需先点卡再点敌人；非指向牌点两次确认。自动化 UI 测试时注意这一点。
+- 地图为纵向卷轴、column-reverse 布局：起点在最底部，只有带红色脉冲光圈的相邻节点可点击（点其他节点会弹出"循路而行"提示）。自动化 UI 测试时务必滚动到地图底部并点击红光节点的圆心。
