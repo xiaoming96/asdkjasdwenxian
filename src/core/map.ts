@@ -24,7 +24,8 @@ export function generateActMap(run: RunState, act: 1 | 2 | 3): ActMap {
   const present: boolean[][] = Array.from({ length: layerCount - 1 }, () => Array(WIDTH).fill(false));
   const edges = new Set<string>(); // "layer:x1>x2"
 
-  const eliteWeight = run.ascension >= 2 ? 14 : 9; // 二重天：精英 9%→14%
+  let eliteWeight = run.ascension >= 2 ? 14 : 9; // 二重天：精英 9%→14%
+  if (run.flags['dailyShajie']) eliteWeight *= 2; // 每日天机·杀劫：精英翻倍
   const eventWeight = run.flags['dailyYinguo'] ? 44 : 22; // 因果昭昭：事件概率翻倍
 
   // 5 条路径（前 4 条从 4 个不同起点出发，第 5 条随机）

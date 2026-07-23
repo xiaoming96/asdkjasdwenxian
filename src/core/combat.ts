@@ -160,6 +160,10 @@ export function startBattle(
     delete run.flags['zhangqi'];
   }
 
+  // 妖怪图鉴收录（§11.4：局结算时并入 profile.seenEnemies）
+  for (const e of b.enemies) run.flags[`seen_${e.enemyId}`] = 1;
+  if (isJiuchong) run.flags['seen_jiuchongtianjie'] = 1;
+
   // 敌人亮出首回合意图
   for (const e of aliveEnemies(b)) setIntent(run, b, e);
 
@@ -445,6 +449,7 @@ function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
       b.waveIndex = wave + 1;
       const next = spawnWave(run, b.waveIndex);
       b.enemies.push(next);
+      run.flags[`seen_${next.enemyId}`] = 1;
       setIntent(run, b, next);
       log(b, `${next.name} 携雷而至！`);
     }
@@ -518,7 +523,6 @@ function startPlayerTurn(run: RunState, b: BattleState) {
   }
 
   let draw = run.drawPerTurn;
-  if (run.flags['dailyLingchao']) draw += 1;
   if (run.flags['dailyQingshen']) draw += 1;
   if (b.tianjiActive) draw += 1;
   if ((b.player.statuses.drawDown ?? 0) > 0) {
@@ -546,10 +550,10 @@ export function endTurn(run: RunState, b: BattleState) {
   // 古木长青
   const gumu = powerN(b, 'gumuchangqing');
   if (gumu > 0) run.hp = Math.min(run.maxHp, run.hp + gumu);
-  // 玩家灼烧（燹雷等对玩家的灼烧同规则）
+  // 玩家灼烧（燹雷等对玩家的灼烧同规则；天火燎原结算 ×2）
   const pZhuoshao = b.player.statuses.zhuoshao ?? 0;
   if (pZhuoshao > 0) {
-    playerDamage(run, b, pZhuoshao, { pierce: true });
+    playerDamage(run, b, run.flags['dailyTianhuo'] ? pZhuoshao * 2 : pZhuoshao, { pierce: true });
     addPlayerStatus(b, 'zhuoshao', -1);
     if (b.outcome !== 'ongoing') return;
   }
@@ -610,7 +614,8 @@ function enemyTurn(run: RunState, b: BattleState) {
   for (const e of aliveEnemies(b)) {
     const zhuo = e.statuses.zhuoshao ?? 0;
     if (zhuo > 0) {
-      enemyLoseHp(run, b, e, zhuo); // 真实伤害，无视护体
+      // 每日天机·天火燎原：灼烧结算 ×2
+      enemyLoseHp(run, b, e, run.flags['dailyTianhuo'] ? zhuo * 2 : zhuo); // 真实伤害，无视护体
       if (e.hp > 0) addEnemyStatus(run, b, e, 'zhuoshao', -1);
     }
     if (e.hp <= 0) continue;

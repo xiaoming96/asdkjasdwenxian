@@ -42,7 +42,11 @@ export function newRun(
   for (const id of chr.deck) run.deck.push(makeCard(run, id));
   if (dailyFlag) {
     run.flags[dailyFlag] = 1;
-    if (dailyFlag === 'dailyLingchao') run.energyMax = 4;
+    if (dailyFlag === 'dailyLingchao') {
+      // 灵潮汹涌：灵气 4，抽牌 4（§11.3）
+      run.energyMax = 4;
+      run.drawPerTurn = 4;
+    }
     if (dailyFlag === 'dailyDadao') {
       // 大道五十：起始牌库扩为 25 张
       while (run.deck.length < 25) {
@@ -175,10 +179,14 @@ function battleRewards(run: RunState, unlocked: string[]) {
     if (!potion) potion = randomPotion(run, false);
   }
 
-  // 法宝：精英必掉（杀劫翻倍）
+  // 法宝：精英必掉；每日天机·杀劫掉落翻倍（第二件直接入囊）
   let relic: string | null = null;
   if (kind === 'elite') {
     relic = randomRelic(run, ['fan', 'ling']);
+    if (run.flags['dailyShajie']) {
+      const extra = randomRelic(run, ['fan', 'ling']);
+      if (extra) gainRelic(run, extra);
+    }
   }
 
   const cards = rollCardChoices(run, kind, unlocked);
@@ -440,6 +448,10 @@ function applyOutcome(run: RunState, o: EventOutcome, screen: EventScreen) {
       run.screen = { kind: 'shop', items, removePrice: 0, removeUsed: true, discount };
       return;
     }
+    case 'extraBattle':
+      // "多走 1 节点"的代价：立即多打一场普通战（§10.20 / §10.26）
+      startBattle(run, 'normal');
+      return;
     case 'zouhuoReward': run.flags['eventBattleReward'] = 1; break;
     case 'yizhuangReward': run.flags['eventBattleReward'] = 2; break;
     case 'jianzhongReward': run.flags['eventBattleReward'] = 3; break;

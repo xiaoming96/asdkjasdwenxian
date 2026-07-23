@@ -25,6 +25,12 @@ export function settleRun(profile: Profile, run: RunState, victory: boolean): Pr
   for (const r of run.relics) {
     if (!p.seenRelics.includes(r)) p.seenRelics.push(r);
   }
+  for (const key of Object.keys(run.flags)) {
+    if (key.startsWith('seen_')) {
+      const id = key.slice(5);
+      if (!p.seenEnemies.includes(id)) p.seenEnemies.push(id);
+    }
+  }
   // 成就
   const unlock = (id: string) => {
     if (!p.achievements.includes(id)) p.achievements.push(id);

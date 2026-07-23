@@ -256,7 +256,7 @@ def({
         { weight: 40, text: '禁制触发，一道罡气将你掀飞！受 12 伤。', hp: -12 },
       ],
     },
-    { label: '先超度再拿', outcomes: [{ text: '你诵经超度，遗蜕化尘。乾坤袋中所获与心中安宁俱全，只是耽搁了路程。', gold: 50, gainPotion: 1, flag: 'chaodu', flagValue: 1 }] },
+    { label: '先超度再拿', outcomes: [{ text: '你诵经超度，遗蜕化尘。乾坤袋中所获与心中安宁俱全，只是耽搁了路程，途中又遇一场妖兽拦路。', gold: 50, gainPotion: 1, special: 'extraBattle' }] },
   ],
 });
 def({
@@ -305,7 +305,7 @@ def({
   scene: '天狗食月，四野妖力大盛，嗥叫此起彼伏。',
   options: [
     { label: '连夜赶路', risky: true, outcomes: [{ text: '妖气最盛之地，妖丹也最肥。本幕后续敌人 +1 罡气，战斗灵石 +50%。', flag: 'shiyue', flagValue: 1 }] },
-    { label: '寻地躲避', outcomes: [{ text: '你寻了处山洞蛰伏一夜，平安无事，只是误了路程。', hp: -0 }] },
+    { label: '寻地躲避', outcomes: [{ text: '你寻了处山洞蛰伏一夜，绕开了妖气最盛处，却在下山时误入兽群，多走了一程。', special: 'extraBattle' }] },
   ],
 });
 def({

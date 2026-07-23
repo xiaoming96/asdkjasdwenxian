@@ -158,18 +158,31 @@ export function CodexScreen(props: { profile: Profile; onBack: () => void }) {
             </div>
           );
         })}
-        {tab === 'enemies' && Object.values(ENEMIES).filter((e) => e.id !== 'baiwuchang').map((e) => (
-          <div key={e.id} class="codex-item">
-            {enemyArt(e.id) && <img class="ci-portrait" src={enemyArt(e.id)!} alt={e.name} loading="lazy" />}
-            <div>
-              <div class="ci-name">{e.name}</div>
-              <div class="ci-text">
-                {e.tier === 'boss' ? '天劫' : e.tier === 'elite' ? '精英' : `第${['一', '二', '三'][e.act - 1]}幕`} · 气血 {e.hp}
-                {enemyNotes[e.id] ? ` · ${enemyNotes[e.id]}` : ''}
+        {tab === 'enemies' && Object.values(ENEMIES).filter((e) => e.id !== 'baiwuchang').map((e) => {
+          const seen = profile.seenEnemies.includes(e.id);
+          const hint = e.tier === 'boss' ? `第${['一', '二', '三'][e.act - 1]}幕天劫` : e.tier === 'elite' ? `第${['一', '二', '三'][e.act - 1]}幕精英` : `第${['一', '二', '三'][e.act - 1]}幕出没`;
+          return (
+            <div key={e.id} class={`codex-item ${seen ? '' : 'lockedx'}`}>
+              {enemyArt(e.id) && (
+                <img
+                  class="ci-portrait"
+                  src={enemyArt(e.id)!}
+                  alt={seen ? e.name : '未知妖怪'}
+                  loading="lazy"
+                  style={seen ? undefined : { filter: 'brightness(0.15) contrast(0.8)', opacity: 0.5 }}
+                />
+              )}
+              <div>
+                <div class="ci-name">{seen ? e.name : '？？？'}</div>
+                <div class="ci-text">
+                  {seen
+                    ? `${e.tier === 'boss' ? '天劫' : e.tier === 'elite' ? '精英' : `第${['一', '二', '三'][e.act - 1]}幕`} · 气血 ${e.hp}${enemyNotes[e.id] ? ` · ${enemyNotes[e.id]}` : ''}`
+                    : `尚未遭遇 · ${hint}`}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <button onClick={props.onBack}>返回</button>
     </div>
