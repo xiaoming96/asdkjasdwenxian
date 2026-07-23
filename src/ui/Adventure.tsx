@@ -8,6 +8,7 @@ import { getEvent } from '../data/events';
 import { BREAKTHROUGHS } from '../data/breakthroughs';
 import { CardView, DeckModal } from './components';
 import { makeCard } from '../core/combat';
+import { makeShareImage } from './shareCard';
 
 // ---------- 奖励 ----------
 
@@ -270,8 +271,22 @@ export function EndView(props: {
         <h2>{s.victory ? '白 日 飞 升' : '生 平 卷 轴'}</h2>
         {s.daohao && <div class="daohao">道号 · {s.daohao}</div>}
         <div class="sub">{s.cause}</div>
+        {/* 路线缩略（§13.2 #8）：本幕走过的节点描朱砂 */}
+        <div class="route-mini">
+          {run.map.layers.map((row, li) => (
+            <div key={li} class="route-row">
+              {row.map((n) => (
+                <span
+                  key={n.id}
+                  class={`route-dot ${run.flags[`visited_${n.id}`] ? 'walked' : ''}`}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
         <div class="end-stats">
           <div><span>行至</span><span>第{['一', '二', '三'][run.act - 1]}幕 第 {run.floor + 1} 层</span></div>
+          <div><span>斩妖</span><span>{run.flags['kills'] ?? 0}</span></div>
           <div><span>精英斩获</span><span>{run.stats.elitesKilled}</span></div>
           <div><span>天劫渡过</span><span>{run.stats.bossesKilled}</span></div>
           <div><span>周天次数</span><span>{run.flags['zhoutianTotal'] ?? 0}</span></div>
@@ -284,6 +299,7 @@ export function EndView(props: {
         </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => setShowDeck(true)}>最终卡组（{run.deck.length}）</button>
+          <button class="gold" onClick={() => makeShareImage(run)}>晒战绩</button>
           <button class="primary" onClick={props.onRestart}>再来一世</button>
           <button class="ghost" onClick={props.onHome}>回主界面</button>
         </div>

@@ -597,6 +597,7 @@ function enterNode(run: RunState, nodeId: string, unlocked: string[]) {
   if (!node) return;
   run.floor = node.layer;
   run.nodeId = nodeId;
+  run.flags[`visited_${nodeId}`] = 1; // 结算路线缩略用
 
   let type = node.type;
   if (type === 'unknown') {

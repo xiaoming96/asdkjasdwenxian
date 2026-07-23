@@ -3,9 +3,22 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Action, MapNode, NodeType, RunState } from '../core/types';
 import { selectableNodes } from '../core/map';
 import { actBg } from './art';
+// game-icons.net 图标（CC BY 3.0，§14.1 白名单来源，署名见 CREDITS）
+import iconBattle from './icons/battle.svg?raw';
+import iconElite from './icons/elite.svg?raw';
+import iconEvent from './icons/event.svg?raw';
+import iconShop from './icons/shop.svg?raw';
+import iconCave from './icons/cave.svg?raw';
+import iconBoss from './icons/boss.svg?raw';
+import iconUnknown from './icons/unknown.svg?raw';
 
 const NODE_ICON: Record<NodeType, string> = {
-  battle: '⚔', elite: '💀', event: '🏮', shop: '🛖', cave: '🧘', boss: '👑', unknown: '❓',
+  battle: iconBattle, elite: iconElite, event: iconEvent, shop: iconShop,
+  cave: iconCave, boss: iconBoss, unknown: iconUnknown,
+};
+const NODE_COLOR: Record<NodeType, string> = {
+  battle: '#2b2b2b', elite: '#c3272b', event: '#b8860b', shop: '#8b6b3d',
+  cave: '#3f7d3a', boss: '#c3272b', unknown: '#4a5568',
 };
 const NODE_LABEL: Record<NodeType, string> = {
   battle: '妖兽', elite: '精英', event: '奇遇', shop: '坊市', cave: '洞府', boss: '天劫', unknown: '未知',
@@ -74,7 +87,11 @@ export function MapScreen(props: { run: RunState; dispatch: (a: Action) => void 
                 class={nodeCls(n)}
                 onClick={() => tapNode(n)}
               >
-                {NODE_ICON[display(n)]}
+                <span
+                  class="node-svg"
+                  style={{ color: NODE_COLOR[display(n)] }}
+                  dangerouslySetInnerHTML={{ __html: NODE_ICON[display(n)] }}
+                />
                 <span class="node-label">{NODE_LABEL[display(n)]}</span>
               </div>
             ))}

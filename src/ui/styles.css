@@ -148,6 +148,8 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 .map-node.current { border-color: var(--liujin); background: #fdf3d7; }
 .map-node.visited { opacity: 0.45; }
 .map-node .node-label { position: absolute; bottom: -18px; font-size: 11px; color: var(--dailan); white-space: nowrap; }
+.map-node .node-svg { width: 30px; height: 30px; display: inline-flex; }
+.map-node .node-svg svg { width: 100%; height: 100%; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
 .map-hint {
   position: fixed;
@@ -662,6 +664,24 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   opacity: 0.92;
 }
 .end-scroll .daohao { font-size: 30px; color: var(--zhusha); letter-spacing: 6px; margin: 10px 0; }
+/* 结算路线缩略：走过的节点描朱砂 */
+.route-mini {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+  margin: 10px auto 4px;
+  width: fit-content;
+}
+.route-row { display: flex; gap: 14px; justify-content: center; }
+.route-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: rgba(43, 43, 43, 0.18);
+}
+.route-dot.walked {
+  background: var(--zhusha);
+  box-shadow: 0 0 5px rgba(195, 39, 43, 0.6);
+}
 .end-stats { display: flex; flex-direction: column; gap: 6px; font-size: 14px; margin: 14px 0; }
 .end-stats div { display: flex; justify-content: space-between; border-bottom: 1px dashed rgba(43,43,43,0.2); padding-bottom: 4px; }
 

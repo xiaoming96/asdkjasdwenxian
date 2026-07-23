@@ -1,7 +1,9 @@
 # 素材授权台账（CREDITS）
 
 > 取用日期：2026-07-23。以下博物馆藏品均为公有领域（CC0 / Open Access），来源与协议逐项核对。
-> 敌人立绘、劫战雷云背景、宣纸纹理为本项目原创生成素材。音效为 Web Audio 代码合成。
+> 敌人立绘、劫战雷云背景、宣纸纹理为本项目原创生成素材。音效与 BGM 为 Web Audio 代码合成。
+>
+> 地图节点图标来自 game-icons.net（CC BY 3.0）：crossed-swords / daemon-skull / lantern-flame / crowned-skull / meditation / uncertainty 作者 Lorc，shop 作者 Delapouite。https://game-icons.net
 
 | 藏品 | 作者 | 馆方 | 协议 | 链接 |
 |---|---|---|---|---|
