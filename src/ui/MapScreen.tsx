@@ -48,7 +48,7 @@ export function MapScreen(props: { run: RunState; dispatch: (a: Action) => void 
     <div
       class="map-scroll fade-in"
       ref={scrollRef}
-      style={{ backgroundImage: `linear-gradient(rgba(244,239,230,0.82), rgba(244,239,230,0.86)), url(${actBg(run.act)})`, backgroundSize: 'cover', backgroundPosition: 'center top', backgroundAttachment: 'local' }}
+      style={{ backgroundImage: `linear-gradient(rgba(244,239,230,0.72), rgba(244,239,230,0.8)), url(${actBg(run.act)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }}
     >
       <div class="map-act-title">{ACT_TITLES[run.act - 1]}</div>
       <div class="map-act-sub">「{ACT_QUOTES[run.act - 1]}」 · 种子 {run.seed}</div>

@@ -133,7 +133,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
         {b.enemies.map((e) => (
           <div
             key={e.uid}
-            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''}`}
+            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''}`}
             onClick={() => e.hp > 0 && tapEnemy(e)}
           >
             <div class="enemy-intent">{intentText(run, e)}</div>
