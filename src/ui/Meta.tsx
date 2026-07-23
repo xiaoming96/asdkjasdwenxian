@@ -9,6 +9,7 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { dailyMutation, todayKey } from '../data/daily';
 import { buyUnlock } from '../save/profileLogic';
 import { sfx, setSfxVolume } from '../audio/sfx';
+import { setBgmVolume } from '../audio/bgm';
 import { enemyArt, cardArtSource } from './art';
 
 // ---------- 主界面 ----------
@@ -251,6 +252,7 @@ export function SettingsScreen(props: { profile: Profile; setProfile: (p: Profil
   function update(k: 'music' | 'sfx', v: number) {
     const p2: Profile = { ...profile, settings: { ...profile.settings, [k]: v } };
     if (k === 'sfx') setSfxVolume(v);
+    if (k === 'music') setBgmVolume(v);
     props.setProfile(p2);
   }
   async function openCredits() {
@@ -280,7 +282,7 @@ export function SettingsScreen(props: { profile: Profile; setProfile: (p: Profil
           value={profile.settings.music}
           onInput={(e) => update('music', Number((e.target as HTMLInputElement).value))}
         />
-        <span style={{ fontSize: '12px', color: 'var(--dailan)' }}>（BGM 素材 P1 接入）</span>
+        <span style={{ fontSize: '12px', color: 'var(--dailan)' }}>（程序化古琴风）</span>
       </div>
       <div class="sub" style={{ marginTop: '20px', lineHeight: 1.9 }}>
         《问长生》 v0.1 · 修仙题材单机肉鸽卡牌<br />

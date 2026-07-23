@@ -1,5 +1,5 @@
-/** 战斗界面（策划案 §13.2 #3 / §13.3） */
-import { useState } from 'preact/hooks';
+/** 战斗界面（策划案 §13.2 #3 / §13.3 手牌交互：点选 + 拖拽双通道） */
+import { useRef, useState } from 'preact/hooks';
 import type { Action, EnemyState, RunState } from '../core/types';
 import { cardCost, canPlay, intentDamage, aliveEnemies } from '../core/combat';
 import { getCard } from '../data/cards';
@@ -62,7 +62,7 @@ function intentText(run: RunState, e: EnemyState): string {
 
 /** 新手引导四步（策划案 §13.5，本地进度存 localStorage） */
 const GUIDE_STEPS = [
-  '出牌方法：先点选一张手牌；攻击牌再点上方敌人释放，防御与技能牌再点一次自己即可打出。',
+  '出牌方法：点选手牌后点敌人（或再点一次）打出；也可以按住卡牌向上拖，拖过中线松手打出，攻击牌直接拖到敌人身上。',
   '敌人头顶显示下回合意图：🗡 数字是来袭伤害，打出防御牌获得护体可以抵挡。',
   '五行相生连招：带金边高亮的牌与当前行位相生，打出触发【行云流水】，效果 +25% 并返还灵气。',
   '五行相克：用克制敌人属性的攻击牌伤害 ×1.5 并附加异常。随时点左上『☯五行』查看口诀。',
@@ -85,6 +85,84 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   const [potionTarget, setPotionTarget] = useState<string | null>(null);
   const [showWuxing, setShowWuxing] = useState(false);
   const [guideStep, setGuideStep] = useState<number>(() => loadGuideStep());
+
+  // ---- 手牌拖拽（§13.3：上滑过阈值线打出，拖到敌人释放，拖回取消）----
+  interface DragState {
+    uid: number;
+    startX: number; startY: number;
+    dx: number; dy: number;
+    moved: boolean;
+    overLine: boolean;
+    hoverEnemy: number | null;
+  }
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+
+  function updateDrag(d: DragState | null) {
+    dragRef.current = d;
+    setDrag(d);
+  }
+
+  function playLineY(): number {
+    return window.innerHeight * 0.55; // 阈值线：屏幕 55% 高度（§13.3）
+  }
+
+  function onCardPointerDown(ev: PointerEvent, uid: number) {
+    if (b.pendingChoice) return;
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    updateDrag({
+      uid, startX: ev.clientX, startY: ev.clientY,
+      dx: 0, dy: 0, moved: false, overLine: false, hoverEnemy: null,
+    });
+  }
+
+  function onCardPointerMove(ev: PointerEvent) {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = ev.clientX - d.startX;
+    const dy = ev.clientY - d.startY;
+    const moved = d.moved || Math.hypot(dx, dy) > 9;
+    const overLine = ev.clientY < playLineY();
+    // 悬停敌人检测（拖到敌人身上释放）
+    let hoverEnemy: number | null = null;
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const enemyEl = el?.closest?.('[data-euid]') as HTMLElement | null;
+    if (enemyEl) hoverEnemy = Number(enemyEl.dataset['euid']);
+    updateDrag({ ...d, dx, dy, moved, overLine, hoverEnemy });
+  }
+
+  function onCardPointerUp(_ev: PointerEvent) {
+    const d = dragRef.current;
+    if (!d) return;
+    updateDrag(null);
+    const inst = b.hand.find((c) => c.uid === d.uid);
+    if (!inst) return;
+    if (!d.moved) {
+      tapCard(d.uid); // 原地松手 = 点选
+      return;
+    }
+    if (!canPlay(run, b, inst)) return; // 不可用牌禁上滑（§13.3）
+    const def = getCard(inst.cardId);
+    const wantsTarget = needsTarget(inst.cardId) && !def.base.aoe;
+    if (wantsTarget) {
+      const alive = aliveEnemies(b);
+      const target = d.hoverEnemy != null && alive.some((e) => e.uid === d.hoverEnemy)
+        ? d.hoverEnemy
+        : alive.length === 1 && d.overLine ? alive[0].uid : null;
+      if (target != null) {
+        dispatch({ t: 'PLAY_CARD', uid: d.uid, target });
+        setSelected(null);
+      } else if (d.overLine) {
+        setSelected(d.uid); // 拖过线但没落在敌人上：保持选中等待点目标
+      }
+      return;
+    }
+    if (d.overLine) {
+      dispatch({ t: 'PLAY_CARD', uid: d.uid });
+      setSelected(null);
+    }
+    // 拖回手牌区：取消，无操作
+  }
 
   function advanceGuide() {
     const next = guideStep + 1;
@@ -149,10 +227,17 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
 
   const choice = b.pendingChoice;
 
+  // 拖拽中的指向牌：拖起后敌人即高亮
+  const dragCard = drag?.moved ? b.hand.find((c) => c.uid === drag.uid) ?? null : null;
+  const dragTargeting = !!(
+    dragCard && canPlay(run, b, dragCard) &&
+    needsTarget(dragCard.cardId) && !getCard(dragCard.cardId).base.aoe
+  );
+
   // 目标选择状态：攻击牌/指向技能已选中，等待点敌人
   const awaitingTarget =
     (selectedCard && needsTarget(selectedCard.cardId) && !getCard(selectedCard.cardId).base.aoe && canPlay(run, b, selectedCard)) ||
-    potionTarget !== null;
+    potionTarget !== null || dragTargeting;
   // 已选中的非指向牌：再点一次打出
   const awaitingConfirm =
     selectedCard && !awaitingTarget && canPlay(run, b, selectedCard);
@@ -166,7 +251,8 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
         {b.enemies.map((e) => (
           <div
             key={e.uid}
-            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''} ${awaitingTarget && e.hp > 0 ? 'targetable' : ''}`}
+            data-euid={e.uid}
+            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''} ${awaitingTarget && e.hp > 0 ? 'targetable' : ''} ${drag?.hoverEnemy === e.uid && dragTargeting ? 'drag-hover' : ''}`}
             onClick={() => e.hp > 0 && tapEnemy(e)}
           >
             <div class="enemy-intent">{intentText(run, e)}</div>
@@ -212,18 +298,48 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
           <div style={{ textAlign: 'center', fontSize: '14px', color: 'var(--dailan)' }}>🛡 护体 {b.player.block}</div>
         )}
         <div class="hand-cards">
-          {b.hand.map((c) => (
-            <CardView
-              key={c.uid}
-              card={c}
-              cost={getCard(c.cardId).cost === 'X' ? 'X' : cardCost(run, b, c)}
-              selected={selected === c.uid}
-              unplayable={!canPlay(run, b, c)}
-              liushuiGlow={glows(c.cardId)}
-              onClick={() => tapCard(c.uid)}
-            />
-          ))}
+          {b.hand.map((c, i) => {
+            // 扇形排布（§13.3）：卡间角随手牌数收缩，选中/拖拽卡直立
+            const n = b.hand.length;
+            const mid = (n - 1) / 2;
+            const ang = Math.min(6, 34 / Math.max(1, n));
+            const isSel = selected === c.uid;
+            const isDrag = drag?.uid === c.uid && drag.moved;
+            let transform: string;
+            if (isDrag) {
+              transform = `translate(${drag!.dx}px, ${drag!.dy}px) rotate(0deg) scale(1.08)`;
+            } else if (isSel) {
+              transform = 'translateY(-26px) scale(1.14) rotate(0deg)';
+            } else {
+              const off = i - mid;
+              transform = `rotate(${(off * ang).toFixed(1)}deg) translateY(${(off * off * 2.2).toFixed(1)}px)`;
+            }
+            return (
+              <div
+                key={c.uid}
+                class={`hand-slot ${isDrag ? 'dragging' : ''}`}
+                style={{ transform, zIndex: isDrag ? 30 : isSel ? 10 : undefined }}
+                onPointerDown={(ev) => onCardPointerDown(ev as unknown as PointerEvent, c.uid)}
+                onPointerMove={(ev) => onCardPointerMove(ev as unknown as PointerEvent)}
+                onPointerUp={(ev) => onCardPointerUp(ev as unknown as PointerEvent)}
+                onPointerCancel={() => updateDrag(null)}
+              >
+                <CardView
+                  card={c}
+                  cost={getCard(c.cardId).cost === 'X' ? 'X' : cardCost(run, b, c)}
+                  selected={isSel}
+                  unplayable={!canPlay(run, b, c)}
+                  liushuiGlow={glows(c.cardId)}
+                />
+              </div>
+            );
+          })}
         </div>
+        {dragCard && canPlay(run, b, dragCard) && (
+          <div class={`play-line ${drag?.overLine || drag?.hoverEnemy != null ? 'armed' : ''}`} style={{ top: '55dvh' }}>
+            {dragTargeting ? '拖到敌人身上松手释放' : drag?.overLine ? '松手打出' : '上滑过此线打出'}
+          </div>
+        )}
         {(awaitingTarget || awaitingConfirm || (!anyPlayable && !choice)) && (
           <div class={`action-hint ${awaitingTarget ? 'hint-target' : ''}`}>
             {potionTarget

@@ -260,8 +260,49 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  padding: 0 4px;
-  min-height: 188px;
+  padding: 0 4px 6px;
+  min-height: 196px;
+}
+/* 手牌槽：承载扇形/拖拽变换（§13.3） */
+.hand-slot {
+  margin: 0 -16px;
+  transition: transform 0.16s;
+  transform-origin: center 120%;
+  touch-action: none;
+  position: relative;
+}
+.hand-slot.dragging { transition: none; }
+.hand-slot .wcard { margin: 0; }
+.hand-slot .wcard.selected { transform: none; }
+.hand-slot:hover { z-index: 5; }
+.hand-slot.dragging .wcard { box-shadow: 0 14px 30px rgba(43, 43, 43, 0.45); cursor: grabbing; }
+
+/* 出牌阈值线（屏幕 55% 高度，§13.3） */
+.play-line {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(470px, 96vw);
+  border-top: 2px dashed rgba(184, 134, 11, 0.75);
+  text-align: center;
+  font-size: 13px;
+  color: #6d5716;
+  padding-top: 4px;
+  z-index: 35;
+  pointer-events: none;
+  text-shadow: 0 1px 4px rgba(244, 239, 230, 0.95);
+}
+.play-line.armed {
+  border-top-color: var(--zhusha);
+  color: var(--zhusha);
+  font-weight: 700;
+}
+
+/* 拖拽悬停在敌人上：金色强调 */
+.enemy.drag-hover .enemy-figure {
+  border-color: var(--liujin);
+  box-shadow: 0 0 0 5px rgba(184, 134, 11, 0.55), 0 0 24px rgba(184, 134, 11, 0.8);
+  transform: scale(1.06);
 }
 .wcard {
   width: 108px; height: 166px;

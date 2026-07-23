@@ -9,6 +9,7 @@ import {
 import { settleRun } from '../save/profileLogic';
 import { dailySeed, dailyMutation } from '../data/daily';
 import { sfx, setSfxVolume } from '../audio/sfx';
+import { setBgmScene, setBgmVolume, unlockBgm, type BgmScene } from '../audio/bgm';
 import { initFx, stopFx, thunderFlash, inkSplash, goldRipple } from '../fx/ink';
 import { HomeScreen, CodexScreen, ZhuanshiScreen, SettingsScreen, AchievementScreen } from './Meta';
 import { MapScreen } from './MapScreen';
@@ -34,9 +35,34 @@ export function App() {
   }, [profile.settings.sfx]);
 
   useEffect(() => {
+    setBgmVolume(profile.settings.music);
+  }, [profile.settings.music]);
+
+  useEffect(() => {
     if (fxRef.current) initFx(fxRef.current);
-    return () => stopFx();
+    // 浏览器自动播放策略：首次交互解锁 BGM
+    const unlock = () => unlockBgm();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => {
+      stopFx();
+      window.removeEventListener('pointerdown', unlock);
+    };
   }, []);
+
+  // 场景音乐（§15.1）：主界面空灵 / 地图清雅 / 战斗渐紧 / Boss 鼓点 / 劫战威压
+  useEffect(() => {
+    let s: BgmScene = 'menu';
+    if (page === 'run' && run) {
+      if (run.battle) {
+        s = run.battle.waveIndex >= 0 ? 'jie' : run.battle.battleType === 'boss' ? 'boss' : 'battle';
+      } else if (run.screen.kind === 'end') {
+        s = 'menu';
+      } else {
+        s = 'map';
+      }
+    }
+    setBgmScene(s);
+  }, [page, run]);
 
   function setProfile(p: Profile) {
     setProfileState(p);
