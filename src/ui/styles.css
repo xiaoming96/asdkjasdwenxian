@@ -62,21 +62,24 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 /* ---------- 主界面 ---------- */
 .home {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   background: url('/assets/bg_menu.webp') center top / cover no-repeat;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+  padding: 16px 20px calc(14px + env(safe-area-inset-bottom));
 }
-.home .spacer { flex: 1; }
+.home .spacer { flex: 1; min-height: 12px; }
 .home-title {
-  margin-top: 12dvh;
+  margin-top: 5dvh;
   writing-mode: vertical-rl;
-  font-size: 64px;
-  letter-spacing: 18px;
+  font-size: clamp(42px, 8dvh, 64px);
+  letter-spacing: 16px;
   font-weight: 700;
   color: var(--ink);
   text-shadow: 0 2px 12px rgba(244, 239, 230, 0.9);
+  flex-shrink: 0;
 }
 .home-seal {
   margin-top: 12px;
@@ -89,9 +92,18 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   letter-spacing: 4px;
   box-shadow: 0 1px 6px rgba(195, 39, 43, 0.5);
 }
-.home-menu { display: flex; flex-direction: column; gap: 12px; width: 78%; }
-.home-menu button { font-size: 19px; letter-spacing: 8px; padding: 13px; backdrop-filter: blur(2px); }
-.home-footer { margin-top: 16px; display: flex; gap: 18px; font-size: 13px; color: var(--dailan); }
+.home-menu { display: flex; flex-direction: column; gap: 10px; width: 78%; flex-shrink: 0; }
+.home-menu button { font-size: 18px; letter-spacing: 8px; padding: 11px; backdrop-filter: blur(2px); }
+.home-footer {
+  margin-top: 12px;
+  display: flex; gap: 18px;
+  font-size: 14px;
+  color: var(--ink);
+  flex-shrink: 0;
+  background: rgba(244, 239, 230, 0.75);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
 .home-footer span { cursor: pointer; text-decoration: underline dotted; }
 
 /* ---------- 顶栏 ---------- */
