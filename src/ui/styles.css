@@ -706,6 +706,97 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 
 .fx-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 90; width: 100vw; height: 100dvh; }
 
+/* ---------- 叙事演出（§3.3） ---------- */
+.narrative-overlay {
+  position: absolute; inset: 0;
+  z-index: 70;
+  background: rgba(24, 22, 18, 0.93);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  animation: fadein 0.6s;
+  color: #e9e2d0;
+  padding: 24px;
+}
+.intro-scroll {
+  background: linear-gradient(180deg, #f7f2e5, #efe7d2);
+  color: var(--ink);
+  border: 2px solid #b9a97e;
+  border-radius: 4px;
+  padding: 30px 22px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6), inset 0 0 30px rgba(185, 169, 126, 0.25);
+  writing-mode: vertical-rl;
+  max-height: 72dvh;
+  animation: scrollIn 1s ease-out;
+}
+@keyframes scrollIn { from { max-height: 0; opacity: 0; } to { max-height: 72dvh; opacity: 1; } }
+.intro-text p { margin: 0 10px; font-size: 17px; letter-spacing: 6px; line-height: 2; }
+.intro-text .intro-quote { color: var(--zhusha); font-weight: 700; font-size: 19px; }
+.narrative-skip {
+  margin-top: 22px;
+  background: transparent; border: 1px solid rgba(233, 226, 208, 0.4);
+  color: #e9e2d0; font-size: 14px;
+  animation: pulse 1.8s infinite;
+}
+.act-title .act-big {
+  font-size: 54px; letter-spacing: 22px; font-weight: 700;
+  color: #f4efe6;
+  text-shadow: 0 0 24px rgba(184, 134, 11, 0.55);
+  animation: fadein 0.9s;
+}
+.act-title .act-sub { margin-top: 14px; font-size: 19px; letter-spacing: 10px; color: var(--liujin); }
+.act-title .act-quote { margin-top: 26px; font-size: 15px; letter-spacing: 4px; color: rgba(233, 226, 208, 0.85); }
+.boss-dialogue { justify-content: flex-end; padding-bottom: 16dvh; background: rgba(24, 22, 18, 0.72); }
+.dialogue-box {
+  background: rgba(24, 22, 18, 0.92);
+  border: 1px solid rgba(184, 134, 11, 0.55);
+  border-radius: 8px;
+  padding: 18px 20px;
+  max-width: 92%;
+  font-size: 16px; line-height: 2; letter-spacing: 1px;
+  animation: fadein 0.4s;
+}
+.dialogue-box .dialogue-next { display: block; text-align: right; color: var(--liujin); font-size: 13px; margin-top: 6px; }
+
+/* 回合切换横幅（§13.4） */
+.turn-banner {
+  position: absolute;
+  top: 42%; left: 0; right: 0;
+  text-align: center;
+  font-size: 26px; letter-spacing: 10px; font-weight: 700;
+  color: var(--ink);
+  background: linear-gradient(90deg, transparent, rgba(244, 239, 230, 0.95) 25%, rgba(244, 239, 230, 0.95) 75%, transparent);
+  padding: 10px 0;
+  z-index: 45;
+  pointer-events: none;
+  animation: bannerSweep 1s ease-out forwards;
+}
+@keyframes bannerSweep {
+  0% { opacity: 0; transform: translateX(-30px); }
+  20% { opacity: 1; transform: translateX(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 突破演出（§13.4：2.5s 可跳过） */
+.breakthrough-cine {
+  position: absolute; inset: 0;
+  z-index: 70;
+  background: radial-gradient(circle at 50% 40%, rgba(184, 134, 11, 0.45), rgba(24, 22, 18, 0.96) 70%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  animation: fadein 0.5s;
+}
+.breakthrough-cine .bt-big {
+  font-size: 74px; font-weight: 700; letter-spacing: 20px;
+  color: #ffd970;
+  text-shadow: 0 0 34px rgba(184, 134, 11, 0.9), 0 0 80px rgba(184, 134, 11, 0.5);
+  animation: btZoom 2.4s ease-out;
+}
+@keyframes btZoom { 0% { transform: scale(0.4); opacity: 0; } 30% { transform: scale(1.12); opacity: 1; } 55% { transform: scale(1); } 100% { transform: scale(1); } }
+.breakthrough-cine .bt-sub { margin-top: 18px; color: #e9e2d0; font-size: 16px; letter-spacing: 6px; }
+
 .fade-in { animation: fadein 0.35s; }
 @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 

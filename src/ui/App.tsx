@@ -12,6 +12,7 @@ import { sfx, setSfxVolume } from '../audio/sfx';
 import { setBgmScene, setBgmVolume, unlockBgm, type BgmScene } from '../audio/bgm';
 import { initFx, stopFx, thunderFlash, inkSplash, goldRipple } from '../fx/ink';
 import { HomeScreen, CodexScreen, ZhuanshiScreen, SettingsScreen, AchievementScreen } from './Meta';
+import { IntroScroll, ActTitle } from './Narrative';
 import { MapScreen } from './MapScreen';
 import { BattleScreen } from './Battle';
 import {
@@ -27,8 +28,19 @@ export function App() {
   const [run, setRun] = useState<RunState | null>(() => loadRun());
   const [page, setPage] = useState<Page>('home');
   const [showDeck, setShowDeck] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
+  const [actTitle, setActTitle] = useState<1 | 2 | 3 | null>(null);
+  const actShownRef = useRef<string | null>(null);
   const settledRef = useRef(false);
   const fxRef = useRef<HTMLCanvasElement>(null);
+
+  // 幕标题页（§3.3）：每幕出发前展示一次
+  useEffect(() => {
+    if (page !== 'run' || !run || run.battle || showIntro) return;
+    if (run.screen.kind !== 'map' || run.floor >= 0) return;
+    const key = `${run.seed}:${run.act}`;
+    if (actShownRef.current !== key) setActTitle(run.act);
+  }, [page, run, showIntro]);
 
   useEffect(() => {
     setSfxVolume(profile.settings.sfx);
@@ -135,6 +147,7 @@ export function App() {
     setRun(r);
     saveRunNow(r);
     setPage('run');
+    setShowIntro(true); // 开局卷轴叙事（§3.3）
     sfx.breakthrough();
   }
 
@@ -216,6 +229,16 @@ export function App() {
   return (
     <div class="frame">
       {content}
+      {showIntro && page === 'run' && <IntroScroll onDone={() => setShowIntro(false)} />}
+      {!showIntro && actTitle !== null && run && (
+        <ActTitle
+          act={actTitle}
+          onDone={() => {
+            actShownRef.current = `${run.seed}:${run.act}`;
+            setActTitle(null);
+          }}
+        />
+      )}
       <canvas ref={fxRef} class="fx-canvas" />
     </div>
   );

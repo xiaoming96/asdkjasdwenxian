@@ -1,5 +1,6 @@
 /** 战斗界面（策划案 §13.2 #3 / §13.3 手牌交互：点选 + 拖拽双通道） */
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { BossDialogue, bossDialogue } from './Narrative';
 import type { Action, EnemyState, RunState } from '../core/types';
 import { cardCost, canPlay, intentDamage, aliveEnemies } from '../core/combat';
 import { getCard } from '../data/cards';
@@ -85,6 +86,22 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   const [potionTarget, setPotionTarget] = useState<string | null>(null);
   const [showWuxing, setShowWuxing] = useState(false);
   const [guideStep, setGuideStep] = useState<number>(() => loadGuideStep());
+
+  // Boss 战前对白（§3.3）：仅开场时展示一次
+  const [showDialogue, setShowDialogue] = useState<boolean>(
+    () => b.battleType === 'boss' && b.turn === 1 && b.cardsPlayed === 0 && b.turnsTotal <= 1,
+  );
+
+  // 回合切换横幅（§13.4）
+  const [banner, setBanner] = useState<string | null>(null);
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (b.turn <= 1) return;
+    setBanner(`回合 ${b.turn} · 你的回合`);
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    bannerTimer.current = setTimeout(() => setBanner(null), 1050);
+    return () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); };
+  }, [b.turn]);
 
   // ---- 手牌拖拽（§13.3：上滑过阈值线打出，拖到敌人释放，拖回取消）----
   interface DragState {
@@ -364,7 +381,16 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
         </div>
       </div>
 
-      {guideStep < GUIDE_STEPS.length && !choice && (
+      {banner && <div class="turn-banner" key={banner}>{banner}</div>}
+
+      {showDialogue && (
+        <BossDialogue
+          lines={bossDialogue(run, isJie ? 'jiuchong' : b.enemies[0]?.enemyId ?? '')}
+          onDone={() => setShowDialogue(false)}
+        />
+      )}
+
+      {guideStep < GUIDE_STEPS.length && !choice && !showDialogue && (
         <div class="guide-toast">
           <span class="guide-num">{guideStep + 1}/{GUIDE_STEPS.length}</span>
           <span class="guide-text">{GUIDE_STEPS[guideStep]}</span>

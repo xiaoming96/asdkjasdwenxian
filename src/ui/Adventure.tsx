@@ -1,5 +1,5 @@
 /** 冒险层界面：奖励 / 坊市 / 事件 / 洞府 / 选牌 / 突破 / 结算（策划案 §13.2） */
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { Action, Profile, RunState } from '../core/types';
 import { getCard } from '../data/cards';
 import { getRelic, RELIC_GRADE_NAME } from '../data/relics';
@@ -220,8 +220,21 @@ export function CardPickView(props: { run: RunState; dispatch: (a: Action) => vo
 export function BreakthroughView(props: { run: RunState; dispatch: (a: Action) => void }) {
   const { run, dispatch } = props;
   const s = run.screen;
+  const [cine, setCine] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setCine(false), 2500); // §13.4：2.5s，可点击跳过
+    return () => clearTimeout(t);
+  }, []);
   if (s.kind !== 'breakthrough') return null;
   const stage = run.act === 1 ? '筑基' : run.act === 2 ? '金丹' : '飞升';
+  if (cine) {
+    return (
+      <div class="breakthrough-cine" onClick={() => setCine(false)}>
+        <div class="bt-big">{stage}</div>
+        <div class="bt-sub">雷云散尽 · 境界突破</div>
+      </div>
+    );
+  }
   return (
     <div class="screen-page fade-in">
       <h2>境 界 突 破</h2>

@@ -419,6 +419,7 @@ function enemyTakeAttack(
 
 function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
   e.hp = 0;
+  run.flags['kills'] = (run.flags['kills'] ?? 0) + 1; // 击杀计数（心魔对白/统计用）
   log(b, `${e.name} 化墨消散`);
   // 火鸦/尸群：同伴死亡强化
   if (e.enemyId === 'huoya') {
