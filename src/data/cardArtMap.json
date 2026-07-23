@@ -1,0 +1,642 @@
+{
+ "yujianshu": {
+  "file": "/assets/cardart/yujianshu.webp",
+  "title": "Heavenly King Virudhaka",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1918.544"
+ },
+ "lianhuanjian": {
+  "file": "/assets/cardart/lianhuanjian.webp",
+  "title": "The Sword Spring, Tiger Hill, from Twelve Views of Tiger Hill, Suzhou",
+  "creator": "Shen Zhou (Chinese, 1427–1509)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1964.371.6"
+ },
+ "duanjinzhi": {
+  "file": "/assets/cardart/duanjinzhi.webp",
+  "title": "Figure with Sword",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1938.12"
+ },
+ "cuifeng": {
+  "file": "/assets/cardart/cuifeng.webp",
+  "title": "Sword",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1915.232"
+ },
+ "feijianhuanji": {
+  "file": "/assets/cardart/feijianhuanji.webp",
+  "title": "Layered Peaks and Splashing Waterfall: Portrait of Hua Yan as a Young Man",
+  "creator": "Hua Yan (Chinese, 1682–c. 1765)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2001.120"
+ },
+ "jinleifu": {
+  "file": "/assets/cardart/jinleifu.webp",
+  "title": "Octafoil-shaped Mirror Featuring Ci Fei, the Dragon Slayer",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1995.376"
+ },
+ "wanjianjue": {
+  "file": "/assets/cardart/wanjianjue.webp",
+  "title": "Album of Daoist and Buddhist Themes: Search the Mountain: Leaf 43",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.43"
+ },
+ "jianqizongheng": {
+  "file": "/assets/cardart/jianqizongheng.webp",
+  "title": "Hu (Jar)",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1975.62"
+ },
+ "gengjinjianyu": {
+  "file": "/assets/cardart/gengjinjianyu.webp",
+  "title": "Album of Daoist and Buddhist Themes: Search the Mountain: Leaf 41",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.41"
+ },
+ "baihongguanri": {
+  "file": "/assets/cardart/baihongguanri.webp",
+  "title": "Small Sword",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1992.393.a"
+ },
+ "tiangangjianzhen": {
+  "file": "/assets/cardart/tiangangjianzhen.webp",
+  "title": "Album of Daoist and Buddhist Themes: Procession of Daoist Deities: Leaf 4",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.4"
+ },
+ "jianxintongming": {
+  "file": "/assets/cardart/jianxintongming.webp",
+  "title": "Small Sword",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1992.393"
+ },
+ "yijianpowanfa": {
+  "file": "/assets/cardart/yijianpowanfa.webp",
+  "title": "Sheath for Sword",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1992.393.b"
+ },
+ "tengmanfu": {
+  "file": "/assets/cardart/tengmanfu.webp",
+  "title": "Bamboo in the Wind",
+  "creator": "Puming (Xuechuang) (Chinese, active before 1274-after 1329)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1953.246"
+ },
+ "zhangduzhi": {
+  "file": "/assets/cardart/zhangduzhi.webp",
+  "title": "Brush Holder with Figures in Landscape and Poetic Inscription by Wang Meilin from Jiading",
+  "creator": "Wang Meilin (Chinese, active c. 1825)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1988.75"
+ },
+ "huichunshu": {
+  "file": "/assets/cardart/huichunshu.webp",
+  "title": "Bamboo, Rocks and Lonely Orchids",
+  "creator": "Zhao Mengfu (Chinese, 1254–1322)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1963.515"
+ },
+ "jingjitengjia": {
+  "file": "/assets/cardart/jingjitengjia.webp",
+  "title": "Brush with Carved Design",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1967.194"
+ },
+ "mudun": {
+  "file": "/assets/cardart/mudun.webp",
+  "title": "Ink Bamboo",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1982.138"
+ },
+ "shengshengbuxi": {
+  "file": "/assets/cardart/shengshengbuxi.webp",
+  "title": "Brush with Carved Designs",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1967.194.a"
+ },
+ "qianmuci": {
+  "file": "/assets/cardart/qianmuci.webp",
+  "title": "Brush with Carved Designs (brush cap)",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1967.194.b"
+ },
+ "chunhuidadi": {
+  "file": "/assets/cardart/chunhuidadi.webp",
+  "title": "Bamboo in Snow",
+  "creator": "Hong Fan (Chinese, active late 1700s–early 1800s)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2023.161"
+ },
+ "gumuchangqing": {
+  "file": "/assets/cardart/gumuchangqing.webp",
+  "title": "Clip for Paper with Sage Seated Under a Pine",
+  "creator": "Pu Zhongqian (Chinese, active 1600s)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1977.8"
+ },
+ "qingtengkuilei": {
+  "file": "/assets/cardart/qingtengkuilei.webp",
+  "title": "Bamboo in Four Seasons: Summer",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1982.150.1"
+ },
+ "wandushixin": {
+  "file": "/assets/cardart/wandushixin.webp",
+  "title": "Bamboo and Insects",
+  "creator": "Wu Bing (Chinese, active 1190–1194)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1964.154"
+ },
+ "jianmuqingtian": {
+  "file": "/assets/cardart/jianmuqingtian.webp",
+  "title": "Insects and Bamboo",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1985.364"
+ },
+ "kuronglunzhuan": {
+  "file": "/assets/cardart/kuronglunzhuan.webp",
+  "title": "Ten Bamboo Studio Painting and Calligraphy Handbook (Shizhuzhai shuhua pu):  Bamboo",
+  "creator": "Hu Zhengyan (Chinese, c. 1584–1674)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1984.45.2.11"
+ },
+ "yinlingjue": {
+  "file": "/assets/cardart/yinlingjue.webp",
+  "title": "Reminiscences of Qinhuai River",
+  "creator": "Shitao (Chinese, 1642–1707)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1966.31.8"
+ },
+ "xuanbingci": {
+  "file": "/assets/cardart/xuanbingci.webp",
+  "title": "River and Mountains on a Clear Autumn Day",
+  "creator": "Dong Qichang (Chinese, 1555–1636)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1959.46"
+ },
+ "hanlu": {
+  "file": "/assets/cardart/hanlu.webp",
+  "title": "River Village:  Fisherman's Joy",
+  "creator": "Zhao Mengfu (Chinese, 1254–1322)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1978.66"
+ },
+ "chaoxijue": {
+  "file": "/assets/cardart/chaoxijue.webp",
+  "title": "River Village in a Rainstorm",
+  "creator": "Lu Wenying (Chinese)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1970.76"
+ },
+ "jilingshu": {
+  "file": "/assets/cardart/jilingshu.webp",
+  "title": "Reminiscences of Qinhuai River",
+  "creator": "Shitao (Chinese, 1642–1707)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1966.31.7"
+ },
+ "guanlan": {
+  "file": "/assets/cardart/guanlan.webp",
+  "title": "River Landscape",
+  "creator": "Min Zhen (Chinese, 1730–after 1788)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1985.71.8"
+ },
+ "jinghuashuiyue": {
+  "file": "/assets/cardart/jinghuashuiyue.webp",
+  "title": "Fishermen-Hermits in Stream and Mountain",
+  "creator": "Zhao Yong (Chinese, c. 1289-c. 1362)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1997.93"
+ },
+ "shangshanruoshui": {
+  "file": "/assets/cardart/shangshanruoshui.webp",
+  "title": "Reminiscences of Qinhuai River",
+  "creator": "Shitao (Chinese, 1642–1707)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1966.31"
+ },
+ "xuanwuzhenhai": {
+  "file": "/assets/cardart/xuanwuzhenhai.webp",
+  "title": "Dish with Landscape and Inscription",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2019.176"
+ },
+ "tianyishengshui": {
+  "file": "/assets/cardart/tianyishengshui.webp",
+  "title": "Reminiscences of Qinhuai River",
+  "creator": "Shitao (Chinese, 1642–1707)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1966.31.2"
+ },
+ "canghainachuan": {
+  "file": "/assets/cardart/canghainachuan.webp",
+  "title": "Willows",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1985.365"
+ },
+ "dayanhuilan": {
+  "file": "/assets/cardart/dayanhuilan.webp",
+  "title": "Reminiscences of Qinhuai River",
+  "creator": "Shitao (Chinese, 1642–1707)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1966.31.1"
+ },
+ "beimingtuntian": {
+  "file": "/assets/cardart/beimingtuntian.webp",
+  "title": "Dream Journey among Rivers and Mountains, no. 90",
+  "creator": "Cheng Zhengkui (Chinese, 1604–1676)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1960.182"
+ },
+ "huodanshu": {
+  "file": "/assets/cardart/huodanshu.webp",
+  "title": "Phoenix-Headed Ewer",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1965.468"
+ },
+ "yinhuofu": {
+  "file": "/assets/cardart/yinhuofu.webp",
+  "title": "Textile Ornaments(?): Pair of Phoenixes",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1942.1083"
+ },
+ "yanbao": {
+  "file": "/assets/cardart/yanbao.webp",
+  "title": "Textile Ornament(?): Phoenix",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1942.1083.2"
+ },
+ "huohuansha": {
+  "file": "/assets/cardart/huohuansha.webp",
+  "title": "Textile Ornament(?): Phoenix",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1942.1083.1"
+ },
+ "liaoyuan": {
+  "file": "/assets/cardart/liaoyuan.webp",
+  "title": "Lobed Mirror with a Tortoise Knob, Musician, and Phoenix",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1995.369"
+ },
+ "zhulongzhimu": {
+  "file": "/assets/cardart/zhulongzhimu.webp",
+  "title": "Section of a Coffin Platform: Phoenix",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1982.260.c"
+ },
+ "sanmeizhenhuo": {
+  "file": "/assets/cardart/sanmeizhenhuo.webp",
+  "title": "Jar with Dragon and Phoenix Design",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1972.14"
+ },
+ "fengmingqishan": {
+  "file": "/assets/cardart/fengmingqishan.webp",
+  "title": "Mirror with Phoenixes, Birds, Butterflies, and Floral Sprays",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1973.74"
+ },
+ "lihuoxinjing": {
+  "file": "/assets/cardart/lihuoxinjing.webp",
+  "title": "Mirror with a Pair of Phoenixes",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1995.389"
+ },
+ "fentian": {
+  "file": "/assets/cardart/fentian.webp",
+  "title": "Mt. Fenghuang (Mt. Phoenix)",
+  "creator": "Song Xu (Chinese, 1525-c. 1606)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1998.78.2"
+ },
+ "huodezhenshen": {
+  "file": "/assets/cardart/huodezhenshen.webp",
+  "title": "Square Mirror with Two Phoenixes and Floral Sprays",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1995.374"
+ },
+ "yuhuoniepan": {
+  "file": "/assets/cardart/yuhuoniepan.webp",
+  "title": "Panel from Model Cooking Stove:  Vermilion Bird",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1925.136"
+ },
+ "yinghuoshouxin": {
+  "file": "/assets/cardart/yinghuoshouxin.webp",
+  "title": "Wine Vessel (Hu) (lid)",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1944.61.b"
+ },
+ "tiebushan": {
+  "file": "/assets/cardart/tiebushan.webp",
+  "title": "Mt. Qingbian",
+  "creator": "Dong Qichang (Chinese, 1555–1636)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1980.10"
+ },
+ "hangtu": {
+  "file": "/assets/cardart/hangtu.webp",
+  "title": "Buddhist Retreat by Stream and Mountains",
+  "creator": "Juran (Chinese, active 960–985)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1959.348"
+ },
+ "luoshi": {
+  "file": "/assets/cardart/luoshi.webp",
+  "title": "Miniature Mountain with Daoist Paradise",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1941.594"
+ },
+ "panshijue": {
+  "file": "/assets/cardart/panshijue.webp",
+  "title": "The Mountain of Five Cataracts",
+  "creator": "Chen Hongshou (Chinese, 1598/99–1652)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1966.366"
+ },
+ "shifushu": {
+  "file": "/assets/cardart/shifushu.webp",
+  "title": "Mt. Dong (Grotto Mountain)",
+  "creator": "Song Xu (Chinese, 1525-c. 1606)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1998.78.5"
+ },
+ "handi": {
+  "file": "/assets/cardart/handi.webp",
+  "title": "Dream Journey to Mt. Tiantai",
+  "creator": "Qian Du (Chinese, 1763–1844)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1975.75"
+ },
+ "dadimaidong": {
+  "file": "/assets/cardart/dadimaidong.webp",
+  "title": "Cloudy Mountains",
+  "creator": "Mi Youren (Chinese, 1072–1151)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1933.220"
+ },
+ "chengshanyin": {
+  "file": "/assets/cardart/chengshanyin.webp",
+  "title": "Mountains of the Immortals",
+  "creator": "Chen Ruyan (Chinese, c. 1331–1371)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1997.95"
+ },
+ "houdezaiwu": {
+  "file": "/assets/cardart/houdezaiwu.webp",
+  "title": "Album of Daoist and Buddhist Themes: Search the Mountain: Leaf 45",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.45"
+ },
+ "shanbeng": {
+  "file": "/assets/cardart/shanbeng.webp",
+  "title": "Brush Rest",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1957.42"
+ },
+ "budongrushan": {
+  "file": "/assets/cardart/budongrushan.webp",
+  "title": "Streams and Mountains",
+  "creator": "Xu Ben (Chinese, 1335–1380)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1997.96"
+ },
+ "wahuangxirang": {
+  "file": "/assets/cardart/wahuangxirang.webp",
+  "title": "Mt. Biyan (Green Cliff)",
+  "creator": "Song Xu (Chinese, 1525-c. 1606)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1998.78.4"
+ },
+ "zhenyuexi": {
+  "file": "/assets/cardart/zhenyuexi.webp",
+  "title": "Clouds Visiting a Mountain Retreat",
+  "creator": "Tao Hong (Chinese, active c. 1610–1640)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1971.19"
+ },
+ "tuna": {
+  "file": "/assets/cardart/tuna.webp",
+  "title": "Calligraphy in Semi-Cursive Style (xing-caoshu)",
+  "creator": "Yueshan Daozong (Chinese, 1629–1709)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2003.353"
+ },
+ "jingxin": {
+  "file": "/assets/cardart/jingxin.webp",
+  "title": "Calligraphy in Semi-Cursive Style (xing-caoshu)",
+  "creator": "Yueshan Daozong (Chinese, 1629–1709)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2003.354"
+ },
+ "mingxiang": {
+  "file": "/assets/cardart/mingxiang.webp",
+  "title": "Poem by Wang Wei in the Cursive Script Style",
+  "creator": "Song Lizong (Chinese, 1205–1264)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1961.421.2"
+ },
+ "guanxiangwuxing": {
+  "file": "/assets/cardart/guanxiangwuxing.webp",
+  "title": "Poem on Imperial Gift of an Embroidered Silk: Calligraphy in Running-Standard Script (xingkaishu)",
+  "creator": "Wen Zhengming (Chinese, 1470–1559)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1998.169"
+ },
+ "powang": {
+  "file": "/assets/cardart/powang.webp",
+  "title": "Calligraphy Couplet",
+  "creator": "Liang Qichao (Chinese, 1873–1929)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2023.162"
+ },
+ "yinguolunhui": {
+  "file": "/assets/cardart/yinguolunhui.webp",
+  "title": "Four Poems: Calligraphy in Cursive Script (xingshu)",
+  "creator": "Chen Jiru (Chinese, 1558–1639)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.65"
+ },
+ "wuxinglunzhuan": {
+  "file": "/assets/cardart/wuxinglunzhuan.webp",
+  "title": "Left Scroll from Calligraphy Couplet",
+  "creator": "Liang Qichao (Chinese, 1873–1929)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2023.162.1"
+ },
+ "zuowang": {
+  "file": "/assets/cardart/zuowang.webp",
+  "title": "Right Scroll from Calligraphy Couplet",
+  "creator": "Liang Qichao (Chinese, 1873–1929)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2023.162.2"
+ },
+ "daofaziran": {
+  "file": "/assets/cardart/daofaziran.webp",
+  "title": "Calligraphy in Running Style based on Wang Bo's Essay on Tengwang Pavilion",
+  "creator": "Tiebao (Chinese, 1752–1824)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2001.42"
+ },
+ "zhoutiandayanjue": {
+  "file": "/assets/cardart/zhoutiandayanjue.webp",
+  "title": "Retreat on an Autumn Day, in Cursive Script",
+  "creator": "Zhu Yunming (Chinese, 1460–1527)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2025.192"
+ },
+ "chenyuan": {
+  "file": "/assets/cardart/chenyuan.webp",
+  "title": "The Lantern Night Excursion of Zhong Kui",
+  "creator": "Yan Hui (Chinese, active 1270–1310)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1961.206"
+ },
+ "xinmo_curse": {
+  "file": "/assets/cardart/xinmo_curse.webp",
+  "title": "Album of Daoist and Buddhist Themes: Search the Mountain: Leaf 49",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.49"
+ },
+ "yezhang": {
+  "file": "/assets/cardart/yezhang.webp",
+  "title": "Album of Daoist and Buddhist Themes: Search the Mountain: Leaf 50",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.50"
+ },
+ "yinguozhai": {
+  "file": "/assets/cardart/yinguozhai.webp",
+  "title": "Album of Daoist and Buddhist Themes: Search the Mountain: Leaf 47",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.47"
+ },
+ "tanchen": {
+  "file": "/assets/cardart/tanchen.webp",
+  "title": "Album of Daoist and Buddhist Themes: Search the Mountain: Leaf 48",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/2004.1.48"
+ }
+}

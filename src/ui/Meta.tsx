@@ -9,7 +9,7 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { dailyMutation, todayKey } from '../data/daily';
 import { buyUnlock } from '../save/profileLogic';
 import { sfx, setSfxVolume } from '../audio/sfx';
-import { enemyArt } from './art';
+import { enemyArt, cardArtSource } from './art';
 
 // ---------- 主界面 ----------
 
@@ -137,10 +137,14 @@ export function CodexScreen(props: { profile: Profile; onBack: () => void }) {
       <div class="codex-list">
         {tab === 'cards' && cardList.map((c) => {
           const seen = profile.seenCards.includes(c.id);
+          const src = seen ? cardArtSource(c.id) : null;
           return (
             <div key={c.id} class={`codex-item ${seen ? '' : 'lockedx'}`}>
-              <span class="ci-name">{seen ? c.name : '？？？'}</span>
-              <span class="ci-text">{seen ? c.text : '尚未参悟此功法'}</span>
+              <div>
+                <div class="ci-name">{seen ? c.name : '？？？'}</div>
+                <div class="ci-text">{seen ? c.text : '尚未参悟此功法'}</div>
+                {src && <div class="ci-text" style={{ opacity: 0.75 }}>卡面：《{src.title}》· {src.museum}</div>}
+              </div>
             </div>
           );
         })}
@@ -243,10 +247,19 @@ export function AchievementScreen(props: { profile: Profile; onBack: () => void 
 
 export function SettingsScreen(props: { profile: Profile; setProfile: (p: Profile) => void; onBack: () => void }) {
   const { profile } = props;
+  const [credits, setCredits] = useState<string | null>(null);
   function update(k: 'music' | 'sfx', v: number) {
     const p2: Profile = { ...profile, settings: { ...profile.settings, [k]: v } };
     if (k === 'sfx') setSfxVolume(v);
     props.setProfile(p2);
+  }
+  async function openCredits() {
+    try {
+      const text = await (await fetch('/assets/CREDITS.md')).text();
+      setCredits(text);
+    } catch {
+      setCredits('台账加载失败');
+    }
   }
   return (
     <div class="screen-page fade-in">
@@ -272,9 +285,19 @@ export function SettingsScreen(props: { profile: Profile; setProfile: (p: Profil
       <div class="sub" style={{ marginTop: '20px', lineHeight: 1.9 }}>
         《问长生》 v0.1 · 修仙题材单机肉鸽卡牌<br />
         五行速查：相生 木→火→土→金→水；相克 木克土 土克水 水克火 火克金 金克木<br />
-        本作全部特效与音效为代码合成，背景图为原创生成素材。
+        卡面与背景采用博物馆公有领域古画（CC0 / Open Access），敌人立绘为原创生成素材，音效为代码合成。
       </div>
+      <button class="ghost" onClick={openCredits}>素材署名（Credits）</button>
       <button onClick={props.onBack}>返回</button>
+      {credits !== null && (
+        <div class="overlay" onClick={(e) => { if (e.target === e.currentTarget) setCredits(null); }}>
+          <div class="panel">
+            <h3>素材授权台账</h3>
+            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '10.5px', lineHeight: 1.6, fontFamily: 'inherit' }}>{credits}</pre>
+            <div style={{ textAlign: 'center' }}><button onClick={() => setCredits(null)}>关闭</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -53,15 +53,12 @@ export function CardView(props: {
   ].join(' ');
   return (
     <div class={cls} onClick={props.onClick}>
-      <div class="c-head">
+      <div class="c-art" style={{ backgroundImage: `url(${cardArt(def.id, def.element, def.type === 'curse')})` }}>
         <span class="c-cost">{cost}</span>
-        <span class="c-name">{def.name}{props.card.upgraded ? '+' : ''}</span>
+        <span class="c-namestrip">{def.name}{props.card.upgraded ? '+' : ''}</span>
         <span class="c-el"><ElBadge el={def.element} /></span>
       </div>
-      <div class="c-art" style={{ backgroundImage: `url(${cardArt(def.element, def.type === 'curse')})` }}>
-        <span class="c-type-tag">{TYPE_NAME[def.type]}</span>
-      </div>
-      <div class="c-type">{RARITY_NAME[def.rarity]}</div>
+      <div class="c-divider"><span class="c-type-tag">{TYPE_NAME[def.type]} · {RARITY_NAME[def.rarity]}</span></div>
       <div class="c-text">{text}</div>
     </div>
   );

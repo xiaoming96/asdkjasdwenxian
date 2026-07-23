@@ -236,35 +236,74 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   min-height: 188px;
 }
 .wcard {
-  width: 104px; height: 160px;
-  border-radius: 8px;
+  width: 108px; height: 166px;
+  border-radius: 7px;
   border: 2px solid var(--ink);
-  background: #fffdf7;
+  background: linear-gradient(180deg, #fbf7ec, #f2ecdd);
   display: flex; flex-direction: column;
-  padding: 4px 5px;
+  padding: 0;
   font-size: 11px;
   position: relative;
+  overflow: hidden;
   transition: transform 0.16s, box-shadow 0.16s, margin 0.16s;
   flex-shrink: 1;
   margin: 0 -16px;
-  box-shadow: 0 2px 6px rgba(43,43,43,0.25);
+  box-shadow: 0 2px 6px rgba(43,43,43,0.3);
   user-select: none;
 }
+/* 通栏出血卡面画：占上半 58%，直接顶到卡框 */
 .wcard .c-art {
-  height: 54px;
-  margin: 3px -1px 2px;
-  border-radius: 4px;
+  height: 58%;
   background-size: cover;
-  background-position: center 30%;
-  border: 1px solid rgba(43, 43, 43, 0.3);
+  background-position: center 25%;
   position: relative;
   flex-shrink: 0;
 }
-.wcard .c-art .c-type-tag {
-  position: absolute; right: 2px; bottom: 2px;
-  font-size: 9px; color: #fffdf7;
-  background: rgba(43, 43, 43, 0.72);
-  border-radius: 3px; padding: 0 4px;
+/* 费用：画面左上墨色圆印 */
+.wcard .c-cost {
+  position: absolute; top: 4px; left: 4px;
+  width: 21px; height: 21px; border-radius: 50%;
+  background: rgba(43, 43, 43, 0.92);
+  border: 1px solid rgba(244, 239, 230, 0.75);
+  color: #f4efe6;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+/* 牌名：画面右上竖排朱砂题签（立轴样式） */
+.wcard .c-namestrip {
+  position: absolute; top: 0; right: 5px;
+  writing-mode: vertical-rl;
+  background: linear-gradient(180deg, #c3272b, #a91f24);
+  color: #fdf6e9;
+  font-size: 11.5px; font-weight: 700;
+  letter-spacing: 2px;
+  padding: 5px 2px 7px;
+  border-radius: 0 0 3px 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  max-height: 86%;
+  line-height: 1.1;
+}
+/* 五行标：画面左下 */
+.wcard .c-el { position: absolute; left: 4px; bottom: 4px; }
+.wcard .c-el .el-badge { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+/* 鎏金分隔线 + 类型 */
+.wcard .c-divider {
+  height: 13px;
+  border-top: 1px solid rgba(184, 134, 11, 0.65);
+  display: flex; justify-content: center;
+  flex-shrink: 0;
+}
+.wcard .c-type-tag {
+  margin-top: -7px;
+  font-size: 9px;
+  color: #6d5716;
+  background: #f4ecd7;
+  border: 1px solid rgba(184, 134, 11, 0.5);
+  border-radius: 7px;
+  padding: 0 6px;
+  line-height: 12px;
+  white-space: nowrap;
 }
 .hand-cards .wcard { cursor: pointer; }
 .hand-cards .wcard:hover { transform: translateY(-14px); z-index: 3; }
@@ -282,27 +321,42 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px; flex-shrink: 0;
 }
-.wcard .c-name { overflow: hidden; white-space: nowrap; flex: 1; font-size: 11.5px; }
-.wcard .c-el { margin-left: auto; flex-shrink: 0; }
-.wcard .c-el .el-badge { font-size: 10px; padding: 1px 3px; }
-.wcard .c-type { color: var(--dailan); font-size: 10px; margin: 1px 0; }
-.wcard .c-text { flex: 1; line-height: 1.35; overflow: hidden; }
-/* 稀有度卡框（§14.1：墨/黛蓝/朱砂/鎏金） */
-.wcard.rare-rare { border-color: var(--dailan); box-shadow: 0 2px 6px rgba(74,85,104,0.35), inset 0 0 0 1px rgba(74,85,104,0.35); }
-.wcard.rare-epic { border-color: var(--zhusha); box-shadow: 0 2px 6px rgba(195,39,43,0.3), inset 0 0 0 1px rgba(195,39,43,0.35); }
+.wcard .c-text {
+  flex: 1;
+  line-height: 1.32;
+  overflow: hidden;
+  padding: 1px 6px 4px;
+  font-size: 10.5px;
+  color: #3a352c;
+}
+/* 稀有度卡框（§14.1：墨/黛蓝/朱砂/鎏金），只保留外框配色与四角角花 */
+.wcard.rare-rare { border-color: var(--dailan); }
+.wcard.rare-epic { border-color: var(--zhusha); }
 .wcard.rare-legendary {
   border-color: var(--liujin); border-width: 2.5px;
-  box-shadow: 0 2px 10px rgba(184,134,11,0.45), inset 0 0 0 1.5px rgba(184,134,11,0.5);
+  box-shadow: 0 2px 10px rgba(184, 134, 11, 0.5);
 }
-.wcard.rare-curse { border-color: #3a2a3a; background: #efe6e8; filter: saturate(0.8); }
-.wcard.upgraded .c-name { color: var(--zhusha); }
-/* 角花装饰 */
-.wcard::after {
+.wcard.rare-curse { border-color: #4a3a4a; filter: saturate(0.75) brightness(0.97); }
+.wcard.rare-curse .c-namestrip { background: linear-gradient(180deg, #4a3a4a, #382c38); }
+.wcard.upgraded .c-namestrip { background: linear-gradient(180deg, #b8860b, #96690a); }
+/* 四角角花（鎏金短线） */
+.wcard::before, .wcard::after {
   content: '';
-  position: absolute; inset: 2px;
-  border-radius: 6px;
-  border: 1px solid rgba(43, 43, 43, 0.12);
+  position: absolute;
+  width: 9px; height: 9px;
   pointer-events: none;
+  opacity: 0.85;
+  z-index: 2;
+}
+.wcard::before {
+  top: 2px; left: 2px;
+  border-top: 1.5px solid rgba(184, 134, 11, 0.9);
+  border-left: 1.5px solid rgba(184, 134, 11, 0.9);
+}
+.wcard::after {
+  bottom: 2px; right: 2px;
+  border-bottom: 1.5px solid rgba(184, 134, 11, 0.9);
+  border-right: 1.5px solid rgba(184, 134, 11, 0.9);
 }
 
 .battle-bottom {

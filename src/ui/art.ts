@@ -3,6 +3,9 @@
  * 全部为原创生成水墨素材，WebP 压缩，按需懒加载。
  */
 import type { CardElement } from '../core/wuxing';
+import cardArtMap from '../data/cardArtMap.json';
+
+const CARD_ART_MAP = cardArtMap as Record<string, { file: string; title: string; museum: string }>;
 
 /** 敌人立绘（九重天劫波次共用雷灵立绘，道雷独立） */
 const ENEMY_ART_IDS = new Set([
@@ -22,10 +25,17 @@ export function enemyArt(enemyId: string): string | null {
   return null;
 }
 
-/** 卡面主图：按五行分组的水墨题材图（诅咒独立） */
-export function cardArt(element: CardElement, isCurse: boolean): string {
+/** 卡面主图：优先每张卡独立的博物馆 CC0 古画，缺失时回退五行题材生成图 */
+export function cardArt(cardId: string, element: CardElement, isCurse: boolean): string {
+  const mapped = CARD_ART_MAP[cardId];
+  if (mapped) return mapped.file;
   if (isCurse) return '/assets/cards/card_curse.webp';
   return `/assets/cards/card_${element}.webp`;
+}
+
+/** 卡面古画出处（藏经阁/详情用） */
+export function cardArtSource(cardId: string): { title: string; museum: string } | null {
+  return CARD_ART_MAP[cardId] ?? null;
 }
 
 /** 每幕战场/地图背景 */
