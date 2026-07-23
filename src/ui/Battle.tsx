@@ -1,13 +1,14 @@
 /** 战斗界面（策划案 §13.2 #3 / §13.3 手牌交互：点选 + 拖拽双通道） */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { BossDialogue, bossDialogue } from './Narrative';
-import type { Action, EnemyState, RunState } from '../core/types';
+import type { Action, BattleState, EnemyState, RunState } from '../core/types';
 import { cardCost, canPlay, intentDamage, aliveEnemies } from '../core/combat';
 import { getCard } from '../data/cards';
 import { getPotion } from '../data/potions';
 import { generates, SHENG, ELEMENT_NAME, ELEMENTS, type Element } from '../core/wuxing';
-import { CardView, ElBadge, PotionBar, DeckModal } from './components';
+import { CardView, ElBadge, PotionBar, DeckModal, EL_COLOR } from './components';
 import { enemyArt, actBg } from './art';
+import { inkSplash } from '../fx/ink';
 
 const STATUS_NAME: Record<string, string> = {
   gangqi: '罡气', guben: '固本', huichun: '回春', zhuoshao: '灼烧', zhangdu: '瘴毒',
@@ -91,6 +92,120 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   const [showDialogue, setShowDialogue] = useState<boolean>(
     () => b.battleType === 'boss' && b.turn === 1 && b.cardsPlayed === 0 && b.turnsTotal <= 1,
   );
+
+  // ---- 战斗反馈层（§13.4）：飘字 / 卡牌飞行残影 / 受击白闪 ----
+  interface FloatNum { id: number; x: number; y: number; text: string; cls: string }
+  interface Ghost { id: number; x: number; y: number; dx: number; dy: number; name: string; color: string }
+  const [floats, setFloats] = useState<FloatNum[]>([]);
+  const [ghosts, setGhosts] = useState<Ghost[]>([]);
+  const [hitUids, setHitUids] = useState<number[]>([]);
+  const fxId = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prevRef = useRef<{ hp: number; b: BattleState } | null>(null);
+  const pendingPlay = useRef<{ uid: number; x: number; y: number; target?: number; name: string; color: string } | null>(null);
+
+  function relPos(clientX: number, clientY: number) {
+    const r = containerRef.current?.getBoundingClientRect();
+    return r ? { x: clientX - r.left, y: clientY - r.top } : { x: clientX, y: clientY };
+  }
+
+  function enemyAnchor(uid: number): { x: number; y: number; clientX: number; clientY: number } | null {
+    const el = document.querySelector(`[data-euid="${uid}"] .enemy-figure`);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const p = relPos(r.left + r.width / 2, r.top + r.height / 2);
+    return { ...p, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+  }
+
+  function spawnFloat(x: number, y: number, text: string, cls: string, delay = 0) {
+    fxId.current += 1;
+    const id = fxId.current;
+    setTimeout(() => {
+      setFloats((f) => [...f, { id, x, y, text, cls }]);
+      setTimeout(() => setFloats((f) => f.filter((o) => o.id !== id)), 1150);
+    }, delay);
+  }
+
+  /** 出牌统一入口：记录卡牌起点用于飞行残影 */
+  function playAction(uid: number, target?: number) {
+    const inst = b.hand.find((c) => c.uid === uid);
+    const el = document.querySelector(`[data-cuid="${uid}"]`);
+    if (inst && el) {
+      const r = el.getBoundingClientRect();
+      const p = relPos(r.left + r.width / 2, r.top + r.height / 2);
+      const def = getCard(inst.cardId);
+      pendingPlay.current = { uid, ...p, target, name: def.name, color: EL_COLOR[def.element] };
+    }
+    dispatch({ t: 'PLAY_CARD', uid, target });
+  }
+
+  // 状态差分 → 战斗反馈
+  useEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = { hp: run.hp, b };
+    if (!prev || prev.b === b) return;
+    const pb = prev.b;
+    const box = containerRef.current?.getBoundingClientRect();
+    const cw = box?.width ?? 470;
+    const ch = box?.height ?? 800;
+    const px = cw / 2;
+    const py = ch - 248; // 手牌区上方
+
+    // 卡牌飞行残影（出牌 → 目标/场中央）
+    const pp = pendingPlay.current;
+    if (pp && pb.hand.some((c) => c.uid === pp.uid) && !b.hand.some((c) => c.uid === pp.uid)) {
+      const to = (pp.target != null ? enemyAnchor(pp.target) : null) ?? { x: px, y: ch * 0.32 };
+      fxId.current += 1;
+      const id = fxId.current;
+      setGhosts((g) => [...g, { id, x: pp.x, y: pp.y, dx: to.x - pp.x, dy: to.y - pp.y, name: pp.name, color: pp.color }]);
+      setTimeout(() => setGhosts((g) => g.filter((o) => o.id !== id)), 420);
+    }
+    pendingPlay.current = null;
+
+    // 敌人差分：掉血飘字 + 受击白闪 + 墨溅；护体增长
+    const newHits: number[] = [];
+    b.enemies.forEach((e, idx) => {
+      const pe = pb.enemies.find((x) => x.uid === e.uid);
+      if (!pe) return;
+      const pos = enemyAnchor(e.uid);
+      if (!pos) return;
+      const dmg = pe.hp - Math.max(0, e.hp);
+      if (dmg > 0) {
+        spawnFloat(pos.x, pos.y - 22, `-${dmg}`, 'f-dmg', idx * 90);
+        newHits.push(e.uid);
+        inkSplash(pos.clientX, pos.clientY);
+      }
+      const bg = e.block - pe.block;
+      if (bg > 0) spawnFloat(pos.x, pos.y + 14, `护体+${bg}`, 'f-block', idx * 90);
+    });
+    if (newHits.length > 0) {
+      setHitUids(newHits);
+      setTimeout(() => setHitUids([]), 360);
+    }
+
+    // 玩家差分：气血 / 护体
+    const hpD = run.hp - prev.hp;
+    if (hpD < 0) spawnFloat(px, py, `${hpD}`, 'f-dmg f-playerhit');
+    else if (hpD > 0) spawnFloat(px, py, `+${hpD}`, 'f-heal');
+    const blkD = b.player.block - pb.player.block;
+    if (blkD > 0) spawnFloat(px + 84, py, `护体+${blkD}`, 'f-block');
+
+    // 触发类提示（来自战斗日志增量）
+    const newLogs = b.log.slice(pb.log.length);
+    let stack = 0;
+    for (const l of newLogs) {
+      if (l.includes('行云流水')) {
+        spawnFloat(px, py - 42 - stack * 26, `行云流水 +${Math.round(run.liushuiBonus * 100)}%`, 'f-gold', stack * 120);
+        stack += 1;
+      } else if (l.includes('周天')) {
+        spawnFloat(px, py - 60 - stack * 26, '五行周天！抽2 · 下张牌0费', 'f-gold f-bigfx', stack * 120);
+        stack += 1;
+      } else if (l.includes('克制')) {
+        spawnFloat(px, ch * 0.3, l, 'f-ke', stack * 120);
+        stack += 1;
+      }
+    }
+  }, [run]);
 
   // 回合切换横幅（§13.4）
   const [banner, setBanner] = useState<string | null>(null);
@@ -177,7 +292,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
         ? d.hoverEnemy
         : alive.length === 1 && d.overLine ? alive[0].uid : null;
       if (target != null) {
-        dispatch({ t: 'PLAY_CARD', uid: d.uid, target });
+        playAction(d.uid, target);
         setSelected(null);
       } else if (d.overLine) {
         setSelected(d.uid); // 拖过线但没落在敌人上：保持选中等待点目标
@@ -185,7 +300,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       return;
     }
     if (d.overLine) {
-      dispatch({ t: 'PLAY_CARD', uid: d.uid });
+      playAction(d.uid);
       setSelected(null);
     }
     // 拖回手牌区：取消，无操作
@@ -214,7 +329,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       const def = getCard(inst.cardId);
       const aoeOrNoTarget = !needsTarget(inst.cardId) || def.base.aoe;
       if (aoeOrNoTarget && canPlay(run, b, inst)) {
-        dispatch({ t: 'PLAY_CARD', uid });
+        playAction(uid);
         setSelected(null);
       } else {
         setSelected(null);
@@ -232,7 +347,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
     }
     if (!selectedCard) return;
     if (!canPlay(run, b, selectedCard)) return;
-    dispatch({ t: 'PLAY_CARD', uid: selectedCard.uid, target: e.uid });
+    playAction(selectedCard.uid, e.uid);
     setSelected(null);
   }
 
@@ -271,6 +386,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
 
   return (
     <div
+      ref={containerRef}
       class={`battle fade-in ${isJie ? 'jie-bg' : ''}`}
       style={isJie ? undefined : { backgroundImage: `linear-gradient(rgba(244,239,230,0.55), rgba(244,239,230,0.4) 40%, rgba(244,239,230,0.88) 62%), url(${actBg(run.act)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }}
     >
@@ -279,7 +395,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
           <div
             key={e.uid}
             data-euid={e.uid}
-            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''} ${awaitingTarget && e.hp > 0 ? 'targetable' : ''} ${drag?.hoverEnemy === e.uid && dragTargeting ? 'drag-hover' : ''}`}
+            class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''} ${awaitingTarget && e.hp > 0 ? 'targetable' : ''} ${drag?.hoverEnemy === e.uid && dragTargeting ? 'drag-hover' : ''} ${hitUids.includes(e.uid) ? 'hitflash' : ''}`}
             onClick={() => e.hp > 0 && tapEnemy(e)}
           >
             <div class="enemy-intent">{intentText(run, e)}</div>
@@ -390,6 +506,22 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
             结束回合
           </button>
         </div>
+      </div>
+
+      {/* 战斗反馈层：飘字与卡牌飞行残影 */}
+      <div class="float-layer">
+        {floats.map((f) => (
+          <div key={f.id} class={`fnum ${f.cls}`} style={{ left: `${f.x}px`, top: `${f.y}px` }}>{f.text}</div>
+        ))}
+        {ghosts.map((g) => (
+          <div
+            key={g.id}
+            class="card-ghost"
+            style={{ left: `${g.x}px`, top: `${g.y}px`, '--dx': `${g.dx}px`, '--dy': `${g.dy}px`, borderColor: g.color }}
+          >
+            {g.name}
+          </div>
+        ))}
       </div>
 
       {banner && <div class="turn-banner" key={banner}>{banner}</div>}

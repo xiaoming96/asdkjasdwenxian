@@ -10,7 +10,7 @@ import { settleRun } from '../save/profileLogic';
 import { dailySeed, dailyMutation } from '../data/daily';
 import { sfx, setSfxVolume } from '../audio/sfx';
 import { setBgmScene, setBgmVolume, unlockBgm, type BgmScene } from '../audio/bgm';
-import { initFx, stopFx, thunderFlash, inkSplash, goldRipple, setAmbientClouds } from '../fx/ink';
+import { initFx, stopFx, thunderFlash, goldRipple, setAmbientClouds } from '../fx/ink';
 import { track } from '../save/analytics';
 import { HomeScreen, CodexScreen, ZhuanshiScreen, SettingsScreen, AchievementScreen } from './Meta';
 import { IntroScroll, ActTitle } from './Narrative';
@@ -129,10 +129,8 @@ export function App() {
         if (nb.zhoutianTotal > pb.zhoutianTotal) { sfx.zhoutian(); vibrate([20, 40, 20]); }
         const prevHp = pb.enemies.reduce((s, e) => s + Math.max(0, e.hp), 0);
         const nextHp = nb.enemies.reduce((s, e) => s + Math.max(0, e.hp), 0);
-        if (nextHp < prevHp && action.t === 'PLAY_CARD') {
-          sfx.hit();
-          inkSplash(window.innerWidth / 2, window.innerHeight * 0.22);
-        }
+        if (nextHp < prevHp && action.t === 'PLAY_CARD') sfx.hit(); // 墨溅由战斗反馈层按命中点绘制
+        if (nb.log.slice(pb.log.length).some((l) => l.includes('克制'))) sfx.keZhi();
         const prevAlive = pb.enemies.filter((e) => e.hp > 0).length;
         const nextAlive = nb.enemies.filter((e) => e.hp > 0).length;
         if (nextAlive < prevAlive) sfx.enemyDie();

@@ -1356,6 +1356,7 @@ function attackPipeline(
       ke = true;
       const keMult = hasRelic(run, 'taijitu') ? 1.75 : 1.5;
       dmg = Math.floor(dmg * keMult);
+      if (i === 0) log(b, `克制！伤害 ×${keMult}`);
     }
     if (liushuiTriggered) dmg = Math.floor(dmg * liushuiMult);
     if ((b.player.statuses.xuruo ?? 0) > 0) dmg = Math.floor(dmg * 0.75);

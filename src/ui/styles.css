@@ -244,8 +244,6 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   50% { opacity: 1; transform: translateX(-50%) scaleX(1.12); }
 }
 @keyframes breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-.enemy.hitflash .enemy-figure { animation: hitflash 0.18s; }
-@keyframes hitflash { 0% { background: #fff; } 100% { background: rgba(43,43,43,0.08); } }
 .enemy-name { font-size: 13px; white-space: nowrap; }
 .hpbar { width: 100%; height: 8px; background: rgba(43,43,43,0.15); border-radius: 4px; overflow: hidden; }
 .hpbar > div { height: 100%; background: var(--zhusha); transition: width 0.25s; }
@@ -777,6 +775,73 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
   animation: fadein 0.4s;
 }
 .dialogue-box .dialogue-next { display: block; text-align: right; color: var(--liujin); font-size: 13px; margin-top: 6px; }
+
+/* ---------- 战斗反馈层（§13.4：命中/数值/触发可视化） ---------- */
+.float-layer {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 48;
+  overflow: hidden;
+}
+.fnum {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: 700;
+  white-space: nowrap;
+  animation: floatUp 1.05s ease-out forwards;
+  text-shadow: 0 1px 3px rgba(244, 239, 230, 0.9), 0 0 8px rgba(244, 239, 230, 0.6);
+}
+@keyframes floatUp {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  12% { opacity: 1; transform: translate(-50%, -58%) scale(1.18); }
+  30% { transform: translate(-50%, -70%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(0.95); }
+}
+.f-dmg { color: var(--zhusha); font-size: 26px; }
+.f-dmg.f-playerhit { font-size: 30px; }
+.f-heal { color: #2e7d32; font-size: 24px; }
+.f-block { color: var(--dailan); font-size: 16px; }
+.f-gold { color: var(--liujin); font-size: 17px; letter-spacing: 1px; }
+.f-gold.f-bigfx { font-size: 21px; }
+.f-ke { color: #d84315; font-size: 19px; letter-spacing: 2px; }
+/* 出牌飞行残影（§13.4 出牌飞行 220ms） */
+.card-ghost {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(250, 246, 236, 0.95);
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: 0 3px 12px rgba(43, 43, 43, 0.4);
+  animation: ghostFly 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  pointer-events: none;
+}
+@keyframes ghostFly {
+  0% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.45); }
+}
+/* 受击白闪 + 抖动（§13.4 命中） */
+.enemy.hitflash .enemy-figure { animation: hitShake 0.34s; }
+.enemy.hitflash .enemy-figure img { animation: hitBright 0.34s; }
+@keyframes hitShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+@keyframes hitBright {
+  0% { filter: brightness(2.2) contrast(0.8); }
+  100% { filter: none; }
+}
+/* 敌人死亡：化墨消散（§13.4） */
+.enemy.dead .enemy-figure { animation: inkDissolve 0.5s ease-in; }
+@keyframes inkDissolve {
+  0% { opacity: 1; filter: blur(0); transform: scale(1); }
+  100% { opacity: 0.25; filter: blur(4px) grayscale(1); transform: scale(0.92) translateY(8px); }
+}
 
 /* 回合切换横幅（§13.4） */
 .turn-banner {
