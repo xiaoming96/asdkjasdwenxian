@@ -127,7 +127,7 @@ def({
 // 憋火护体承接是最优解——护体属性期中考试）；第三道劫雷后狂暴：每回合 +2 罡气。
 
 def({
-  id: 'leiling_kuilei', name: '雷灵傀儡', element: 'metal', hp: 360, act: 1, tier: 'boss', ai: 'leiling',
+  id: 'leiling_kuilei', name: '雷灵傀儡', element: 'metal', hp: 300, act: 1, tier: 'boss', ai: 'leiling',
   note: '护体属性期中考试：劫雷（金）用火护体承接；第三道劫雷后狂暴（软性斩杀计时器）',
   moves: [
     { id: 'leiyin', name: '雷引', kind: 'defend', block: 10, gainSelf: { gangqi: 1 } },
@@ -363,30 +363,31 @@ export interface LeiWave {
   special?: string;
   /** 开场脚本（入场时触发一次）：道雷 'zhuxin' 诛心——心魔 ≥6 时你手牌中费用最高的牌本场 +1 费 */
   opener?: string;
-  breatherAfter?: boolean; // 渡过后【喘息】：回 10 血、抽 2、吐纳 +1（八重天难度取消）
+  breatherAfter?: boolean; // 渡过后【喘息】：回 12 血、抽 2、吐纳 +1（八重天难度取消）
 }
 
+// 基础总血 704（M4 调平：原 826 按耐力战 14–20 回合门槛下调 ~15%）
 export const JIUCHONG_WAVES: LeiWave[] = [
   // 一：雷击 6
-  { id: 'jingzhelei', name: '惊蛰雷', element: 'wood', hp: 40, baseDamage: 6 },
+  { id: 'jingzhelei', name: '惊蛰雷', element: 'wood', hp: 34, baseDamage: 6 },
   // 二：雷击 7；死亡时施你气滞 1
-  { id: 'yinshalei', name: '阴煞雷', element: 'water', hp: 48, baseDamage: 7, special: 'deathQizhi' },
+  { id: 'yinshalei', name: '阴煞雷', element: 'water', hp: 41, baseDamage: 7, special: 'deathQizhi' },
   // 三：雷击 9；渡过后喘息
-  { id: 'zixiaolei', name: '紫霄雷', element: 'fire', hp: 58, baseDamage: 9, breatherAfter: true },
+  { id: 'zixiaolei', name: '紫霄雷', element: 'fire', hp: 50, baseDamage: 9, breatherAfter: true },
   // 四：双击 6×2；每回合 +1 罡气
-  { id: 'benlei', name: '奔雷', element: 'metal', hp: 70, baseDamage: 6, times: 2, special: 'gangqiPerTurn' },
+  { id: 'benlei', name: '奔雷', element: 'metal', hp: 60, baseDamage: 6, times: 2, special: 'gangqiPerTurn' },
   // 五：雷击 11 + 移除你 1 层增益
-  { id: 'xuanlei', name: '玄雷', element: 'water', hp: 84, baseDamage: 11, special: 'ximie' },
+  { id: 'xuanlei', name: '玄雷', element: 'water', hp: 72, baseDamage: 11, special: 'ximie' },
   // 六：雷击 10 + 你 +2 灼烧；渡过后喘息
-  { id: 'xianlei', name: '燹雷', element: 'fire', hp: 100, baseDamage: 10, special: 'burnPlayer', breatherAfter: true },
+  { id: 'xianlei', name: '燹雷', element: 'fire', hp: 85, baseDamage: 10, special: 'burnPlayer', breatherAfter: true },
   // 七：雷击 13；场效果：你每回合第 3 次起的得气不触发得气段
-  { id: 'falei', name: '罚雷', element: 'earth', hp: 118, baseDamage: 13, special: 'deqiCap' },
+  { id: 'falei', name: '罚雷', element: 'earth', hp: 100, baseDamage: 13, special: 'deqiCap' },
   // 八：雷击 15；每第 2 回合"天罚 22"——护体承接 ≥12 点则减半
-  { id: 'mielei', name: '灭雷', element: 'metal', hp: 138, baseDamage: 15, special: 'tianfa' },
-  // 九：雷击 17；基础血 170，实际 = 170 +（心魔+业力）×10（combat 处理）；
+  { id: 'mielei', name: '灭雷', element: 'metal', hp: 117, baseDamage: 15, special: 'tianfa' },
+  // 九：雷击 17；基础血 145，实际 = 145 +（心魔+业力）×10（combat 处理）；
   //    每第 3 回合"问道"：弃 3 张或受 20 伤；低于 30% 血时"回光"：+3 罡气；
   //    心魔 ≥6 开场"诛心"（opener 'zhuxin'）；九重天难度追加第二形态（+90 血，雷击 +4）
-  { id: 'daolei', name: '道雷', element: 'none', hp: 170, baseDamage: 17, special: 'wendao', opener: 'zhuxin' },
+  { id: 'daolei', name: '道雷', element: 'none', hp: 145, baseDamage: 17, special: 'wendao', opener: 'zhuxin' },
 ];
 
 // 入口占位 def：combat.ts 见 id 'jiuchongtianjie' 即按 JIUCHONG_WAVES 车轮战展开（waveIndex 驱动），

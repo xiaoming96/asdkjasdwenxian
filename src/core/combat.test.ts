@@ -459,7 +459,7 @@ describe('吐纳（§4.2）', () => {
 // ---------- 雷灵傀儡劫雷 ----------
 
 describe('雷灵傀儡（幕一 Boss）', () => {
-  it('第 4 回合劫雷 22，提前一回合明示', () => {
+  it('第 4 回合劫雷 20，提前一回合明示', () => {
     const run = makeRun();
     const boss = makeEnemyState(run, 'leiling_kuilei');
     boss.intent = NOOP;
@@ -468,14 +468,14 @@ describe('雷灵傀儡（幕一 Boss）', () => {
     endTurn(run, b); // 敌方回合末声明下回合（第 4 回合）意图
     expect(b.turn).toBe(4);
     expect(boss.intent?.special).toBe('jielei');
-    expect(boss.intent?.damage).toBe(22);
-    expect(intentDamage(b, boss)).toBe(22);
+    expect(boss.intent?.damage).toBe(20);
+    expect(intentDamage(b, boss)).toBe(20);
     // 劫雷落下
     endTurn(run, b);
-    expect(run.hp).toBe(80 - 22);
+    expect(run.hp).toBe(80 - 20);
   });
 
-  it('第 8 回合劫雷 30', () => {
+  it('第 8 回合劫雷 26', () => {
     const run = makeRun();
     const boss = makeEnemyState(run, 'leiling_kuilei');
     boss.intent = NOOP;
@@ -483,7 +483,7 @@ describe('雷灵傀儡（幕一 Boss）', () => {
     b.turn = 7;
     endTurn(run, b);
     expect(boss.intent?.special).toBe('jielei');
-    expect(boss.intent?.damage).toBe(30);
+    expect(boss.intent?.damage).toBe(26);
   });
 });
 

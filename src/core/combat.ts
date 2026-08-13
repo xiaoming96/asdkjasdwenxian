@@ -383,10 +383,10 @@ function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
     const wave = e.flags['wave'];
     const w = JIUCHONG_WAVES[wave];
     if (w.breatherAfter && run.ascension < 8) {
-      heal(run, 10);
+      heal(run, 12);
       drawCards(run, b, 2);
       gainEnergy(run, b, 1);
-      log(b, '【喘息】雷云暂歇：回 10 血、抽 2、吐纳 +1');
+      log(b, '【喘息】雷云暂歇：回 12 血、抽 2、吐纳 +1');
     }
     if (wave + 1 < JIUCHONG_WAVES.length) {
       b.waveIndex = wave + 1;
@@ -632,12 +632,12 @@ function setIntent(run: RunState, b: BattleState, e: EnemyState) {
     return;
   }
 
-  // 雷灵傀儡：第 4/8/12 回合劫雷 22/30/38（金属性攻击，提前一回合明示）
+  // 雷灵傀儡：第 4/8/12 回合劫雷 20/26/34（金属性攻击，提前一回合明示）
   if (e.enemyId === 'leiling_kuilei') {
     const nextTurn = b.turn + 1;
     if (nextTurn === 4 || nextTurn === 8 || nextTurn === 12) {
       const nth = nextTurn === 4 ? 1 : nextTurn === 8 ? 2 : 3;
-      const dmg = nth === 1 ? 22 : nth === 2 ? 30 : 38;
+      const dmg = nth === 1 ? 20 : nth === 2 ? 26 : 34;
       e.intent = {
         id: 'jielei', name: `第${'一二三'[nth - 1]}道劫雷`, kind: 'attack',
         damage: dmg, special: 'jielei', n: nth,
