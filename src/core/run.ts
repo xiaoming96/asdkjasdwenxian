@@ -66,6 +66,7 @@ export function newRun(
   // 业力（§11.1）：宿慧业力 + 四重天·业火随身 +1
   run.karma = Math.max(0, profile.legacy.karma + (asc >= 4 ? 1 : 0));
   run.demon = Math.max(0, Math.min(9, run.karma));
+  if (run.demon > 0) run.flags['demonPeak'] = run.demon;
 
   // 角色卡组
   const chrId = CHARACTERS[character] ? character : 'jianxiu';
@@ -87,7 +88,10 @@ export function newRun(
   // 每日天机（§11.3）：run 只设 flag，战斗内修改由 combat 读 flag 实现
   if (dailyFlag) {
     run.flags[dailyFlag] = 1;
-    if (dailyFlag === 'dailyXinmo') run.demon = Math.max(run.demon, Math.min(9, run.karma + 4)); // 心魔滋长：开局心魔 4
+    if (dailyFlag === 'dailyXinmo') {
+      run.demon = Math.max(run.demon, Math.min(9, run.karma + 4)); // 心魔滋长：开局心魔 4
+      run.flags['demonPeak'] = Math.max(run.flags['demonPeak'] ?? 0, run.demon);
+    }
     if (dailyFlag === 'dailyZhaolu') run.lifespan = 30; // 朝露之命：开局寿元 30（突破延寿翻倍）
     if (dailyFlag === 'dailyDadao') {
       // 大道五十：起始牌库扩为 25 张（重复抽自身卡组）
@@ -119,6 +123,8 @@ export function cloneRun(run: RunState): RunState {
 export function addDemon(run: RunState, delta: number) {
   const floor = run.relics.includes('xinmozhong') ? 3 : 0;
   run.demon = Math.max(floor, Math.min(9, run.demon + delta));
+  // 守心如玉成就以峰值判定"全程心魔 0"
+  if (delta > 0) run.flags['demonPeak'] = Math.max(run.flags['demonPeak'] ?? 0, run.demon);
 }
 
 /** 丹毒 ≥8 上限 −10 的阈值（道果「药王鼎」各阈值 +4） */
@@ -555,6 +561,9 @@ function applyOutcome(run: RunState, o: EventOutcome, screen: EventScreen) {
   }
   if (o.flag) {
     run.flags[o.flag] = o.flagValue ?? 1;
+    // 因果链"善份"记账（成就"一诺千金"数 chainDone_* ≥6，§11.5）
+    if (o.flag.startsWith('chain_')) run.flags[`chainDone_${o.flag.slice(6)}`] = 1;
+    if (o.flag === 'daolei_minus30') run.flags['chainDone_xinmo'] = 1;
     // 因果链起点：记录当前战斗数（战斗结算处检查触发）
     if (o.flag === 'chain_linghu') run.flags['chain_linghuStart'] = run.stats.battles;
     if (o.flag === 'chain_fangsheng') run.flags['chain_fangshengStart'] = run.stats.battles;
@@ -974,6 +983,8 @@ export function reduce(prev: RunState, action: Action, unlocked: string[] = []):
       }
       default: return prev;
     }
+    // 战斗内丹毒变动（服丹/尸毒）后同步 ≥8 上限 −10 的维护
+    syncToxinMaxHp(run);
     // 战斗内燃寿（枯荣轮转/不灭灯等）也可油尽灯枯
     if (!run.over && run.battle && run.battle.outcome === 'ongoing' && run.lifespan <= 0) {
       finishRun(run, false, '油尽灯枯，坐化于途');

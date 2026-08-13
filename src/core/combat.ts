@@ -259,12 +259,23 @@ function playerTakeAttack(run: RunState, b: BattleState, e: EnemyState, base: nu
 
 function checkPlayerDeath(run: RunState, b: BattleState) {
   if (run.hp > 0 || b.outcome !== 'ongoing') return;
-  // 浴火涅槃
+  // 浴火涅槃：弃全部手牌，每张以 niepan% 上限复活（§5.4）；得气段：复活时清除全部负面
   const niepan = b.player.statuses.niepan ?? 0;
   if (niepan > 0) {
-    run.hp = Math.max(1, Math.floor((run.maxHp * niepan) / 100));
+    const count = b.hand.length;
+    for (const c of [...b.hand]) {
+      if (c.vanish) b.exhaustPile.push(c);
+      else b.discardPile.push(c);
+    }
+    b.hand = [];
+    const pct = Math.min(100, niepan * count);
+    run.hp = Math.max(1, Math.floor((run.maxHp * pct) / 100));
     delete b.player.statuses.niepan;
-    log(b, `浴火涅槃！以 ${run.hp} 气血重生`);
+    if (b.playedByElement['_niepanCleanse']) {
+      const negatives: StatusId[] = ['zhuoshao', 'zhangdu', 'qizhi', 'pozhan', 'drawDown', 'tunaDown', 'sleeveBan', 'blockHalf'];
+      for (const s of negatives) delete b.player.statuses[s];
+    }
+    log(b, `浴火涅槃！焚尽 ${count} 张手牌，以 ${run.hp} 气血重生`);
     return;
   }
   // 不灭灯（每局一次；寿元 <10 无效）
@@ -1011,6 +1022,7 @@ function enemyAct(run: RunState, b: BattleState, e: EnemyState) {
     }
     case 'zhihun': // 勾魂：你心魔 +1
       run.demon = Math.max(0, Math.min(9, run.demon + 1));
+      run.flags['demonPeak'] = Math.max(run.flags['demonPeak'] ?? 0, run.demon); // 守心如玉成就用峰值
       log(b, `${e.name} 勾魂摄魄，心魔 +1`);
       return finishEnemyMove(run, b, e);
     case 'shidu': // 尸毒：你丹毒 +1
@@ -1299,6 +1311,7 @@ export function playCard(
     b.powers.push({ cardId: def.id, upgraded: inst.upgraded, counter: 0 });
     // 火德真身得气段：自身灼烧全清（数据难表达的挂点）
     if (def.id === 'huodezhenshen' && shengActive) delete b.player.statuses.zhuoshao;
+    if (def.id === 'yuhuoniepan' && shengActive) b.playedByElement['_niepanCleanse'] = 1; // 得气：复活时清负面
   }
 
   // ---- 计数与触发 ----
@@ -1725,8 +1738,8 @@ function attackWithCard(
         case 'zhise': // 滞涩
           applyZhise(b, t);
           break;
-        case 'jiaoxi': // 浇熄：蓄力中取消蓄力改普通行动；否则移 1 层增益
-          if (t.intent?.kind === 'charge' || (t.flags['charging'] ?? 0) > 0) {
+        case 'jiaoxi': // 浇熄：蓄力中取消蓄力改普通行动；否则移 1 层增益（心魔蓄力为"劫数"，不可浇熄，§8.7）
+          if (t.enemyId !== 'xinmo' && (t.intent?.kind === 'charge' || (t.flags['charging'] ?? 0) > 0)) {
             t.flags['charging'] = 0;
             delete t.flags['release'];
             t.intent = basicMove(t);
@@ -1912,8 +1925,8 @@ export function useElixirInBattle(run: RunState, b: BattleState, elixirId: strin
       }
       break;
     }
-    case 'qingxindan': { // 心魔 −1，移除全部负面（丹毒净清已由 toxin 累积处理）
-      run.demon = Math.max(0, run.demon - 1);
+    case 'qingxindan': { // 心魔 −1，移除全部负面（丹毒净清已由 toxin 累积处理；心魔种：下限 3）
+      run.demon = Math.max(run.relics.includes('xinmozhong') ? 3 : 0, run.demon - 1);
       const negatives: StatusId[] = ['zhuoshao', 'qizhi', 'pozhan', 'drawDown', 'tunaDown', 'sleeveBan', 'blockHalf'];
       for (const s of negatives) delete b.player.statuses[s];
       break;

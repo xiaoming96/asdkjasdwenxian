@@ -11,8 +11,12 @@
  */
 import { newRun, reduce } from '../core/run';
 import { defaultProfile } from '../save/storage';
+import { computeUnlocked } from '../data/milestones';
 import { botAction, BotRng, type BotKind } from './bots';
 import type { RunState } from '../core/types';
+
+/** 模拟按满配解锁跑（全卡池），避免空 unlocked 把卡池锁在普通级使平衡数据失真 */
+const FULL_UNLOCKED = computeUnlocked({ daowei: 99999, runsTotal: 99 });
 
 const MAX_ACTIONS = 3000;      // 单局动作上限
 const MAX_BATTLE_TURNS = 60;   // 单场战斗回合上限（判负）
@@ -91,7 +95,7 @@ export function simulateOne(seed: string, bot: BotKind, ascension: number): SimR
       if (pick) pickedCards.push(pick.cardId);
     }
 
-    const next = reduce(run, action);
+    const next = reduce(run, action, FULL_UNLOCKED);
     actions += 1;
     if (next === run) {
       // 非法动作（Bot 决策与引擎状态不一致）：兜底一次，仍无效则中止
@@ -106,7 +110,7 @@ export function simulateOne(seed: string, bot: BotKind, ascension: number): SimR
               : run.screen.kind === 'cave'
                 ? ({ t: 'CAVE_LEAVE' } as const)
                 : null;
-      const n2 = fallback ? reduce(run, fallback) : run;
+      const n2 = fallback ? reduce(run, fallback, FULL_UNLOCKED) : run;
       if (n2 === run) {
         anomaly = `Bot 卡死（${action.t} 在 ${run.battle ? 'battle' : run.screen.kind} 下无效）`;
         break;

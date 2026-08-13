@@ -64,7 +64,7 @@ def({ id: 'xuanguijia', name: '玄龟甲', grade: 'ling', text: '你的土属性
 // 挂点 run：每局一次，事件的负面结果可重掷（用后本局失效）
 def({ id: 'jiuweihuhao', name: '九尾狐毫', grade: 'ling', text: '每局一次：事件的负面结果重掷' });
 // 挂点 run：解锁地图任意处炼丹（无需洞府节点；寿元照耗）
-def({ id: 'qingtongdanlu', name: '青铜丹炉', grade: 'ling', text: '可在地图任意处炼丹（无需洞府；寿元照耗）' });
+def({ id: 'qingtongdanlu', name: '青铜丹炉', grade: 'ling', text: '炉火常温：洞府炼丹不计入两项行动之数（寿元照耗）' });
 // 挂点 combat：金牌得气段触发时，该牌伤害 +2
 def({ id: 'jiansui', name: '剑穗', grade: 'ling', text: '你的金牌得气段触发时，该牌 +2 伤' });
 // 挂点 combat：每场战斗开始行位初始化为玩家选定之行（开局即可接顺生链）

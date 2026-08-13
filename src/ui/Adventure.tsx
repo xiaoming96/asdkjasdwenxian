@@ -388,7 +388,7 @@ export function EventView(props: { run: RunState; dispatch: Dispatch }) {
       <div class="event-page">
         <div class="event-title">{ev.name}</div>
         <div class="event-scene">{ev.scene}</div>
-        {!s.resultText && (
+        {(!s.resultText || (s.eventId === 'fangshidushi' && s.stage > 0)) && (
           <div class="event-options">
             {ev.options.map((opt, i) => {
               const cantGold = opt.requireGold !== undefined && run.gold < opt.requireGold;
@@ -415,7 +415,9 @@ export function EventView(props: { run: RunState; dispatch: Dispatch }) {
           <>
             <div class="event-result">{s.resultText}</div>
             <div class="evt-continue">
-              <button class="primary" onClick={() => dispatch({ t: 'LEAVE_EVENT' })}>继续赶路</button>
+              <button class="primary" onClick={() => dispatch({ t: 'LEAVE_EVENT' })}>
+                {s.eventId === 'fangshidushi' && s.stage > 0 ? '收手离开' : '继续赶路'}
+              </button>
             </div>
           </>
         )}

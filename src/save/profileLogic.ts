@@ -53,7 +53,7 @@ export function settleRun(profile: Profile, run: RunState, victory: boolean): Pr
     unlock('jindandadao');   // 金丹大道：首次通关
     unlock('bairifeisheng'); // 白日飞升：首次渡过九重天劫
     if (run.deck.length <= 10) unlock('dadaozhijian');           // 大道至简：卡组 ≤10 通关（v3 收紧）
-    if (run.demon === 0) unlock('shouxinruyu');                  // 守心如玉：全程心魔 0 通关
+    if (run.demon === 0 && (run.flags['demonPeak'] ?? 0) === 0) unlock('shouxinruyu'); // 守心如玉：全程心魔 0（按峰值）通关
     if (run.stats.elixirsUsed === 0) unlock('bigushanren');      // 辟谷仙人：全程不服丹通关
     if (run.stats.lifespanBurned >= 30) unlock('randengzhe');    // 燃灯者：累计燃寿 ≥30 年并通关
     if (run.ascension >= 9) unlock('jiutianlanyue');             // 九天揽月：九重天通关
