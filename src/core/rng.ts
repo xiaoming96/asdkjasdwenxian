@@ -11,6 +11,7 @@ export const RNG_STREAMS = [
   'enemyAI',
   'event',
   'shop',
+  'alchemy',
   'misc',
 ] as const;
 
