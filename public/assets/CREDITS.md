@@ -91,3 +91,11 @@
 | Tall Bamboo and Distant Mountains, after Wang Meng | Wang Hui (Chinese, 1632–1717) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1953.629 |
 | Listening to the Sound of Autumn in a Misty Grove | Zhang Feng (Chinese, active c. 1632–1662) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1977.173 |
 | Album of Seasonal Landscapes, Leaf A (previous leaf 4) | Xiao Yuncong (Chinese, 1596–1673) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1955.302.4 |
+
+## v3 新增起始卡卡面（取用日期：2026-08-13）
+
+| 藏品 | 作者 | 馆方 | 协议 | 链接 |
+|---|---|---|---|---|
+| Sheer Cliffs | Min Zhen (Chinese, 1730–after 1788) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1985.71.12 |
+| Scholar Watching the Waterfall | Luo Ping (Chinese, 1733–1799) | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1975.95 |
+| Text of the Perfection of Wisdom (Mahāprajñāpāramitā) Sūtra | 佚名 | The Cleveland Museum of Art | CC0 | https://clevelandart.org/art/1933.454 |

@@ -1,21 +1,48 @@
-/** 战斗界面（策划案 §13.2 #3 / §13.3 手牌交互：点选 + 拖拽双通道） */
+/**
+ * 战斗界面 v3（策划案 §13.2 界面3 / §13.3 / §13.4 / §4.4）
+ * - 两行卡面：基础段常亮 + 得气段灰墨，"打出将得气"时鎏金点亮（核心教学 UI）
+ * - 行位罗盘：五行环 + 周天进度；滞气墨浊 / 天人合一金环
+ * - 袖藏两步结束回合：END_TURN { sleeveUids }
+ * - 护体属性条 + 敌意图五行染色 + 克伐提示
+ * 交互沿用仓库约定：攻击牌先点卡再点敌；非指向牌点两次确认；扇形手牌 + 拖拽双通道。
+ */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { BossDialogue, bossDialogue } from './Narrative';
-import type { Action, BattleState, EnemyState, RunState } from '../core/types';
+import type { Action, BattleState, CardInstance, EnemyState, RunState } from '../core/types';
 import { cardCost, canPlay, intentDamage, aliveEnemies } from '../core/combat';
 import { getCard } from '../data/cards';
-import { getPotion } from '../data/potions';
-import { generates, SHENG, ELEMENT_NAME, ELEMENTS, type Element } from '../core/wuxing';
-import { CardView, ElBadge, PotionBar, DeckModal, EL_COLOR } from './components';
+import {
+  SHENG, KE, ELEMENT_NAME, ELEMENTS, KEFA_VERB, KEFA_NAME,
+  type Element, type CardElement,
+} from '../core/wuxing';
+import { CardFace, ElBadge, ElixirBar, DeckModal, EL_COLOR, elName } from './components';
 import { enemyArt, actBg } from './art';
-import { inkSplash } from '../fx/ink';
+import { inkSplash, deqiFlash, zhiqiInk } from '../fx/ink';
+import { sfx } from '../audio/sfx';
+
+// ---- 音效新 API 代理（audio 由他人并行改写：新名可用则用，暂缺时回退旧名，皆为可选调用）----
+interface SfxV3 {
+  deqi?: (el: Element) => void;
+  zhiqi?: () => void;
+  kefa?: () => void;
+  sleeve?: () => void;
+  zhoutian?: () => void;
+  liushui?: (el: Element) => void;
+  keZhi?: () => void;
+}
+const sfxV3 = sfx as unknown as SfxV3;
+const sfxDeqi = (el: Element) => (sfxV3.deqi ?? sfxV3.liushui)?.(el);
+const sfxZhiqi = () => sfxV3.zhiqi?.();
+const sfxKefa = () => (sfxV3.kefa ?? sfxV3.keZhi)?.();
+const sfxSleeve = () => sfxV3.sleeve?.();
+const sfxZhoutian = () => sfxV3.zhoutian?.();
 
 const STATUS_NAME: Record<string, string> = {
   gangqi: '罡气', guben: '固本', huichun: '回春', zhuoshao: '灼烧', zhangdu: '瘴毒',
-  chanfu: '缠缚', pojia: '破甲', xuruo: '虚弱', yishang: '易伤', fanci: '反刺',
-  fanshao: '反烧', tengou: '藤偶', niepan: '涅槃', yinguo: '因果', retainBlock: '蓄水',
-  nextTurnDraw: '蓄牌', nextTurnEnergy: '蓄灵', nextTurnBlock: '蓄土', drawDown: '滞识',
-  energyDown: '滞灵', handCapDown: '缚手', blockHalf: '剑域', guishaDan: '龟息',
+  qizhi: '气滞', pozhan: '破绽', ruanhua: '软化', fanci: '反刺', fanshao: '反烧',
+  tengou: '藤偶', niepan: '涅槃', yinguo: '因果',
+  nextTurnDraw: '蓄牌', nextTurnBlock: '蓄土', retainBlock: '蓄护',
+  drawDown: '滞识', tunaDown: '滞纳', sleeveBan: '封袖', blockHalf: '剑域', guixiDan: '龟息',
 };
 
 function StatusChips({ statuses }: { statuses: Partial<Record<string, number>> }) {
@@ -44,30 +71,85 @@ const ENEMY_ICON: Record<string, string> = {
   xianlei: '⚡', falei: '⚡', mielei: '⚡', daolei: '☯',
 };
 
-function intentText(run: RunState, e: EnemyState): string {
+/** 敌方意图（§4.6）：攻击图标染敌五行色；dailyWenluan 隐藏数值，天机丹全显 */
+function IntentChip({ run, b, e }: { run: RunState; b: BattleState; e: EnemyState }) {
   const it = e.intent;
-  if (!it) return '…';
-  const hideNumbers = run.flags['dailyTianjiluan'] && !run.battle?.tianjiActive;
+  if (!it) return <div class="enemy-intent">…</div>;
+  const hideNumbers = !!run.flags['dailyWenluan'] && !b.tianjiActive;
+  const tint = { borderLeftColor: EL_COLOR[e.element] };
   switch (it.kind) {
     case 'attack': {
-      const dmg = intentDamage(run.battle!, e);
+      const dmg = intentDamage(b, e);
       const times = it.times && it.times > 1 ? `×${it.times}` : '';
-      return hideNumbers ? `🗡 ?${times}` : `🗡 ${dmg}${times}`;
+      return (
+        <div class="enemy-intent" style={tint}>
+          <span class="intent-atk" style={{ color: EL_COLOR[e.element] }}>⚔︎</span>
+          {' '}{hideNumbers ? '?' : dmg}{times}
+        </div>
+      );
     }
-    case 'defend': return '🛡 防御';
-    case 'buff': return '↑ 强化';
-    case 'debuff': return '↓ 削弱';
-    case 'charge': return '🌩 蓄力';
-    default: return '❓ 未知';
+    case 'defend': return <div class="enemy-intent" style={tint}>🛡 防御</div>;
+    case 'buff': return <div class="enemy-intent" style={tint}>↑ 强化</div>;
+    case 'debuff': return <div class="enemy-intent" style={tint}>↓ 削弱</div>;
+    case 'charge': return <div class="enemy-intent" style={tint}>🌩 蓄力</div>;
+    default: return <div class="enemy-intent" style={tint}>❓ 未知</div>;
   }
+}
+
+/** 行位罗盘（§13.2 界面3）：五行环 + 周天进度；murk=滞气墨浊，tianren=金环旋转 */
+function StanceCompass(props: { b: BattleState; goal: number; murk: boolean }) {
+  const { b } = props;
+  const R = 22;
+  return (
+    <div
+      class={`stance-compass ${props.murk || b.shengBlocked ? 'murk' : ''} ${b.tianren ? 'tianren' : ''}`}
+      title={
+        b.tianren
+          ? '天人合一待发：下一张有得气段的牌双段齐发（无视行位）'
+          : b.shengBlocked
+            ? '滞气：你的下一张有属性牌无法得气'
+            : `行位：${b.stance ? ELEMENT_NAME[b.stance] : '无'}。打出被行位所生之行的牌可【得气】。周天进度 ${b.chain.length}/${props.goal}。`
+      }
+    >
+      {ELEMENTS.map((el, i) => {
+        const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+        const active = b.stance === el;
+        const next = !b.shengBlocked && b.stance != null && SHENG[b.stance] === el;
+        return (
+          <span
+            key={el}
+            class={`compass-dot ${active ? 'active' : ''} ${next ? 'next' : ''}`}
+            style={{
+              background: EL_COLOR[el],
+              transform: `translate(${(Math.cos(a) * R).toFixed(1)}px, ${(Math.sin(a) * R).toFixed(1)}px)${active ? ' scale(1.18)' : ''}`,
+            }}
+          >
+            {ELEMENT_NAME[el]}
+          </span>
+        );
+      })}
+      <div class="compass-center">
+        <span>{b.tianren ? '合一' : b.shengBlocked ? '滞气' : b.stance ? ELEMENT_NAME[b.stance] : '行位'}</span>
+        <div class="chain-dots">
+          {Array.from({ length: props.goal }, (_, i) => (
+            <span
+              key={i}
+              class={`chain-dot ${i < b.chain.length ? 'on' : ''}`}
+              style={i < b.chain.length ? { background: EL_COLOR[b.chain[i]] } : undefined}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** 新手引导四步（策划案 §13.5，本地进度存 localStorage） */
 const GUIDE_STEPS = [
   '出牌方法：点选手牌后点敌人（或再点一次）打出；也可以按住卡牌向上拖，拖过中线松手打出，攻击牌直接拖到敌人身上。',
-  '敌人头顶显示下回合意图：🗡 数字是来袭伤害，打出防御牌获得护体可以抵挡。',
-  '五行相生连招：带金边高亮的牌与当前行位相生，打出触发【行云流水】，效果 +25% 并返还灵气。',
-  '五行相克：用克制敌人属性的攻击牌伤害 ×1.5 并附加异常。随时点左上『☯五行』查看口诀。',
+  '敌人头顶是下回合意图，⚔︎ 图标染其五行色。护体也有五行：敌攻克你的护体挡半（▼红箭头），你的护体克敌攻倍挡（▲金箭头）。',
+  '得气：卡面第二行平时灰墨。当行位（罗盘高亮）所生之行与手牌相合时，那张牌的得气段鎏金点亮——打出即双段齐发。',
+  '克伐：用克制敌人属性的攻击牌触发专属动词（剪伐/破土/滞涩/浇熄/熔锻）。点敌人可查看其属性与克伐提示；随时点左上『☯五行』看口诀。',
 ];
 
 function loadGuideStep(): number {
@@ -78,20 +160,52 @@ function loadGuideStep(): number {
   }
 }
 
+/** 攻击目标元素 ee 的克伐动词提示：找到克 ee 的行 */
+function counterElement(ee: Element): Element {
+  return ELEMENTS.find((k) => KE[k] === ee)!;
+}
+
 export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => void }) {
   const { run, dispatch } = props;
   const b = run.battle!;
   const [selected, setSelected] = useState<number | null>(null);
-  const [viewPile, setViewPile] = useState<'draw' | 'discard' | 'exhaust' | null>(null);
+  const [dualPick, setDualPick] = useState<'a' | 'b'>('a');
+  const [viewPile, setViewPile] = useState<'draw' | 'discard' | 'exhaust' | 'sleeved' | null>(null);
   const [pickedUids, setPickedUids] = useState<number[]>([]);
-  const [potionTarget, setPotionTarget] = useState<string | null>(null);
   const [showWuxing, setShowWuxing] = useState(false);
   const [guideStep, setGuideStep] = useState<number>(() => loadGuideStep());
+  const [enemyDetail, setEnemyDetail] = useState<number | null>(null); // 敌人 uid
+  // 袖藏浮层（结束回合两步）
+  const [sleeveOpen, setSleeveOpen] = useState(false);
+  const [sleevePicks, setSleevePicks] = useState<number[]>([]);
+  // 罗盘滞气墨浊（180ms）与周天五色环（900ms）
+  const [compassMurk, setCompassMurk] = useState(false);
+  const [zhoutianFx, setZhoutianFx] = useState(false);
 
   // Boss 战前对白（§3.3）：仅开场时展示一次
   const [showDialogue, setShowDialogue] = useState<boolean>(
     () => b.battleType === 'boss' && b.turn === 1 && b.cardsPlayed === 0 && b.turnsTotal <= 1,
   );
+
+  // ---- 得气预判（契约 §types.ts 行位判定）：打出将得气 → 得气段鎏金点亮 ----
+  function willDeqi(c: CardInstance): { deqi: boolean; side: 'a' | 'b' | 'both' | null } {
+    const def = getCard(c.cardId);
+    const hasSheng = !!def.sheng || !!def.dual;
+    if (!hasSheng || b.shengBlocked) return { deqi: false, side: null };
+    const check = (el: CardElement) =>
+      el !== 'none' && (b.tianren || b.wuxingDanNext || (b.stance != null && SHENG[b.stance] === el));
+    if (def.dual) {
+      const a = check(def.dual.elements[0]);
+      const bb = check(def.dual.elements[1]);
+      return { deqi: a || bb, side: a && bb ? 'both' : a ? 'a' : bb ? 'b' : null };
+    }
+    return { deqi: check(def.element), side: null };
+  }
+
+  // ---- 袖藏上限（契约 sleeveCapBonus 注释）：1 + 洛书 + 冥想加成；北冥吞天无上限；sleeveBan 封 ----
+  const sleeveBanned = (b.player.statuses.sleeveBan ?? 0) > 0;
+  const sleeveUnlimited = b.powers.some((p) => p.cardId === 'beimingtuntian');
+  const sleeveCap = sleeveBanned ? 0 : 1 + (run.relics.includes('luoshu') ? 1 : 0) + b.sleeveCapBonus;
 
   // ---- 战斗反馈层（§13.4）：飘字 / 卡牌飞行残影 / 受击白闪 ----
   interface FloatNum { id: number; x: number; y: number; text: string; cls: string }
@@ -102,7 +216,10 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   const fxId = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevRef = useRef<{ hp: number; b: BattleState } | null>(null);
-  const pendingPlay = useRef<{ uid: number; x: number; y: number; target?: number; name: string; color: string } | null>(null);
+  const pendingPlay = useRef<{
+    uid: number; x: number; y: number; clientX: number; clientY: number;
+    target?: number; name: string; color: string; el: CardElement;
+  } | null>(null);
 
   function relPos(clientX: number, clientY: number) {
     const r = containerRef.current?.getBoundingClientRect();
@@ -126,17 +243,28 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
     }, delay);
   }
 
-  /** 出牌统一入口：记录卡牌起点用于飞行残影 */
+  /** 出牌统一入口：记录卡牌起点用于飞行残影 / 得气涟漪；双行牌带 dualPick */
   function playAction(uid: number, target?: number) {
     const inst = b.hand.find((c) => c.uid === uid);
+    if (!inst) return;
+    const def = getCard(inst.cardId);
     const el = document.querySelector(`[data-cuid="${uid}"]`);
-    if (inst && el) {
-      const r = el.getBoundingClientRect();
-      const p = relPos(r.left + r.width / 2, r.top + r.height / 2);
-      const def = getCard(inst.cardId);
-      pendingPlay.current = { uid, ...p, target, name: def.name, color: EL_COLOR[def.element] };
+    let dp: 'a' | 'b' | undefined;
+    if (def.dual) {
+      dp = uid === selected ? dualPick : (willDeqi(inst).side === 'b' ? 'b' : 'a');
     }
-    dispatch({ t: 'PLAY_CARD', uid, target });
+    if (el) {
+      const r = el.getBoundingClientRect();
+      const cx0 = r.left + r.width / 2;
+      const cy0 = r.top + r.height / 2;
+      const p = relPos(cx0, cy0);
+      const elem: CardElement = def.dual ? def.dual.elements[dp === 'b' ? 1 : 0] : def.element;
+      pendingPlay.current = {
+        uid, ...p, clientX: cx0, clientY: cy0, target,
+        name: def.name, color: EL_COLOR[def.element], el: elem,
+      };
+    }
+    dispatch({ t: 'PLAY_CARD', uid, target, dualPick: dp });
   }
 
   // 状态差分 → 战斗反馈
@@ -160,7 +288,6 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       setGhosts((g) => [...g, { id, x: pp.x, y: pp.y, dx: to.x - pp.x, dy: to.y - pp.y, name: pp.name, color: pp.color }]);
       setTimeout(() => setGhosts((g) => g.filter((o) => o.id !== id)), 420);
     }
-    pendingPlay.current = null;
 
     // 敌人差分：掉血飘字 + 受击白闪 + 墨溅；护体增长
     const newHits: number[] = [];
@@ -199,28 +326,59 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       // 回合结算中敌人有攻击意图但一滴血没掉：护体全部挡下
       const incoming = pb.enemies
         .filter((e) => e.hp > 0)
-        .reduce((s, e) => s + (intentDamage(pb, e) ?? 0), 0);
+        .reduce((s, e) => s + (e.intent?.kind === 'attack' ? (intentDamage(pb, e) ?? 0) * (e.intent.times ?? 1) : 0), 0);
       if (incoming > 0) spawnFloat(px, py, `护体挡下 ${Math.min(incoming, pb.player.block)}`, 'f-blocked');
     } else if (blkD < 0) {
       spawnFloat(px, py, `护体挡下 ${-blkD}`, 'f-blocked');
     }
     if (blkD > 0) spawnFloat(px + 84, py, `护体+${blkD}`, 'f-block');
 
+    // 得气（deqiCountTurn 增量）：鎏金涟漪 + 五声单音 + 飘字
+    if (b.turn === pb.turn && b.deqiCountTurn > pb.deqiCountTurn) {
+      const at = pp ?? { x: px, y: py, clientX: 0, clientY: 0, el: 'none' as CardElement };
+      deqiFlash(pp?.clientX ?? window.innerWidth / 2, pp?.clientY ?? window.innerHeight * 0.6);
+      if (at.el !== 'none') sfxDeqi(at.el as Element);
+      spawnFloat(pp?.x ?? px, (pp?.y ?? py) - 30, '得气', 'f-deqi');
+    }
+
+    // 滞气（shengBlocked 上升沿）：全屏角落墨浊 + 罗盘蒙墨 180ms + 浊弦一声
+    if (b.shengBlocked && !pb.shengBlocked) {
+      zhiqiInk();
+      sfxZhiqi();
+      setCompassMurk(true);
+      setTimeout(() => setCompassMurk(false), 180);
+      spawnFloat(px, py - 30, '滞气', 'f-zhiqi');
+    }
+
+    // 五行周天 · 天人合一（tianren 上升沿 / 周天计数）：900ms 五色环（非阻塞）
+    if ((b.tianren && !pb.tianren) || b.zhoutianTotal > pb.zhoutianTotal) {
+      setZhoutianFx(true);
+      setTimeout(() => setZhoutianFx(false), 900);
+      sfxZhoutian();
+      spawnFloat(px, py - 60, '五行周天 · 天人合一', 'f-gold f-bigfx');
+    }
+
     // 触发类提示（来自战斗日志增量）
     const newLogs = b.log.slice(pb.log.length);
     let stack = 0;
+    const kefaAt = (pp?.target != null ? enemyAnchor(pp.target) : null) ?? { x: px, y: ch * 0.3 };
     for (const l of newLogs) {
-      if (l.includes('行云流水')) {
-        spawnFloat(px, py - 42 - stack * 26, `行云流水 +${Math.round(run.liushuiBonus * 100)}%`, 'f-gold', stack * 120);
+      const verb = Object.values(KEFA_NAME).find((v) => l.includes(v));
+      if (verb) {
+        // 克伐动词飘字（剪伐/破土/滞涩/浇熄/熔锻，250ms 弹出演出）
+        spawnFloat(kefaAt.x, kefaAt.y - 44 - stack * 24, `【${verb}】`, 'f-kefa', stack * 120);
+        sfxKefa();
         stack += 1;
-      } else if (l.includes('周天')) {
-        spawnFloat(px, py - 60 - stack * 26, '五行周天！抽2 · 下张牌0费', 'f-gold f-bigfx', stack * 120);
+      } else if (l.includes('诛心') || l.includes('问道') || l.includes('拷问') || l.includes('贪影') || l.includes('心魔')) {
+        // Boss 机制提示沿用 log 飘字
+        spawnFloat(px, ch * 0.28 + stack * 26, l, 'f-boss', stack * 140);
         stack += 1;
-      } else if (l.includes('克制')) {
-        spawnFloat(px, ch * 0.3, l, 'f-ke', stack * 120);
+      } else if (l.includes('袖藏')) {
+        spawnFloat(px, py - 30 - stack * 24, l, 'f-gold', stack * 120);
         stack += 1;
       }
     }
+    pendingPlay.current = null;
   }, [run]);
 
   // 回合切换横幅（§13.4）
@@ -232,6 +390,12 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
     bannerTimer.current = setTimeout(() => setBanner(null), 1050);
     return () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); };
+  }, [b.turn]);
+
+  // 回合切换后重置袖藏浮层选择
+  useEffect(() => {
+    setSleeveOpen(false);
+    setSleevePicks([]);
   }, [b.turn]);
 
   // ---- 手牌拖拽（§13.3：上滑过阈值线打出，拖到敌人释放，拖回取消）----
@@ -256,7 +420,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   }
 
   function onCardPointerDown(ev: PointerEvent, uid: number) {
-    if (b.pendingChoice) return;
+    if (b.pendingChoice || sleeveOpen) return;
     (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
     updateDrag({
       uid, startX: ev.clientX, startY: ev.clientY,
@@ -277,7 +441,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       const slotEl = el?.closest?.('[data-cuid]') as HTMLElement | null;
       const overUid = slotEl ? Number(slotEl.dataset['cuid']) : null;
       if (overUid != null && overUid !== d.uid && b.hand.some((c) => c.uid === overUid)) {
-        setSelected(overUid);
+        selectCard(overUid);
         updateDrag({ ...d, uid: overUid, dx, dy, moved, overLine: false, hoverEnemy: null });
         return;
       }
@@ -311,7 +475,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
         playAction(d.uid, target);
         setSelected(null);
       } else if (d.overLine) {
-        setSelected(d.uid); // 拖过线但没落在敌人上：保持选中等待点目标
+        selectCard(d.uid); // 拖过线但没落在敌人上：保持选中等待点目标
       }
       return;
     }
@@ -334,7 +498,16 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
 
   function needsTarget(cardId: string): boolean {
     const def = getCard(cardId);
-    return (def.type === 'attack' && !(def.upText && false)) || !!def.targetEnemy;
+    return def.type === 'attack' || !!def.targetEnemy;
+  }
+
+  /** 选中卡：双行牌同时初始化默认定行（顺生侧优先） */
+  function selectCard(uid: number) {
+    setSelected(uid);
+    const inst = b.hand.find((c) => c.uid === uid);
+    if (inst && getCard(inst.cardId).dual) {
+      setDualPick(willDeqi(inst).side === 'b' ? 'b' : 'a');
+    }
   }
 
   function tapCard(uid: number) {
@@ -352,36 +525,63 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
       }
       return;
     }
-    setSelected(uid);
+    selectCard(uid);
   }
 
   function tapEnemy(e: EnemyState) {
-    if (potionTarget) {
-      dispatch({ t: 'USE_POTION', potion: potionTarget, target: e.uid });
-      setPotionTarget(null);
+    if (selectedCard && canPlay(run, b, selectedCard) && needsTarget(selectedCard.cardId) && !getCard(selectedCard.cardId).base.aoe) {
+      playAction(selectedCard.uid, e.uid);
+      setSelected(null);
       return;
     }
-    if (!selectedCard) return;
-    if (!canPlay(run, b, selectedCard)) return;
-    playAction(selectedCard.uid, e.uid);
+    // 非选目标状态：点开敌人详情（属性 + 克伐提示，§4.4④⑤）
+    setEnemyDetail(e.uid);
+  }
+
+  // ---- 结束回合两步：先弹袖藏浮层，确认后 dispatch END_TURN { sleeveUids } ----
+  function onEndTurnClick() {
     setSelected(null);
-  }
-
-  function usePotion(id: string) {
-    const p = getPotion(id);
-    if (p.targetEnemy) {
-      setPotionTarget(id);
+    if (b.hand.length === 0) {
+      dispatch({ t: 'END_TURN', sleeveUids: [] });
       return;
     }
-    dispatch({ t: 'USE_POTION', potion: id });
+    setSleevePicks([]);
+    setSleeveOpen(true);
   }
 
-  // 行云流水提示：手牌中被当前行位所生的牌加金边（§18 对策：自动高亮）
-  function glows(cardId: string): boolean {
-    const def = getCard(cardId);
-    if (def.element === 'none' || !b.xingwei) return false;
-    return generates(b.xingwei, def.element);
+  function confirmEndTurn(picks: number[]) {
+    if (picks.length > 0) sfxSleeve();
+    setSleeveOpen(false);
+    setSleevePicks([]);
+    dispatch({ t: 'END_TURN', sleeveUids: picks });
   }
+
+  function toggleSleevePick(uid: number) {
+    if (sleeveBanned) return;
+    setSleevePicks((prev) => {
+      if (prev.includes(uid)) return prev.filter((x) => x !== uid);
+      if (!sleeveUnlimited && prev.length >= sleeveCap) {
+        return sleeveCap === 1 ? [uid] : prev; // 上限 1 时点新卡直接换选
+      }
+      return [...prev, uid];
+    });
+  }
+
+  // 袖藏浮层快捷键：N / Esc = 不袖藏直接结束；Enter = 按当前选择结束
+  useEffect(() => {
+    if (!sleeveOpen) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'n' || ev.key === 'N' || ev.key === 'Escape') {
+        ev.preventDefault();
+        confirmEndTurn([]);
+      } else if (ev.key === 'Enter') {
+        ev.preventDefault();
+        confirmEndTurn(sleevePicks);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sleeveOpen, sleevePicks]);
 
   const choice = b.pendingChoice;
 
@@ -395,10 +595,24 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
   // 目标选择状态：攻击牌/指向技能已选中，等待点敌人
   const awaitingTarget =
     (selectedCard && needsTarget(selectedCard.cardId) && !getCard(selectedCard.cardId).base.aoe && canPlay(run, b, selectedCard)) ||
-    potionTarget !== null || dragTargeting;
+    dragTargeting;
   // 已选中的非指向牌：再点一次打出
   const awaitingConfirm =
     selectedCard && !awaitingTarget && canPlay(run, b, selectedCard);
+
+  // 护体条生克箭头（§4.4⑤）：敌攻克你护体 = ▼红；你护体克敌攻 = ▲金
+  const blockEl = b.player.blockElement;
+  const incomingAtkEls = aliveEnemies(b)
+    .filter((e) => e.intent?.kind === 'attack' || e.intent?.kind === 'charge')
+    .map((e) => e.element);
+  const blkDanger = blockEl !== 'none' && incomingAtkEls.some((el) => el !== 'none' && KE[el as Element] === blockEl);
+  const blkStrong = blockEl !== 'none' && incomingAtkEls.some((el) => el !== 'none' && KE[blockEl] === el);
+
+  // 周天目标行数：道果"一气化三清"为 4，其余 5
+  const zhoutianGoal = run.fruits.includes('yiqihuasanqing') ? 4 : 5;
+
+  const detailEnemy = enemyDetail != null ? b.enemies.find((e) => e.uid === enemyDetail) ?? null : null;
+  const selectedDualDef = selectedCard ? getCard(selectedCard.cardId).dual : undefined;
 
   return (
     <div
@@ -414,7 +628,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
             class={`enemy ${e.hp <= 0 ? 'dead' : ''} ${isJie || e.maxHp >= 130 ? 'boss' : e.maxHp >= 90 ? 'elite' : ''} ${awaitingTarget && e.hp > 0 ? 'targetable' : ''} ${drag?.hoverEnemy === e.uid && dragTargeting ? 'drag-hover' : ''} ${hitUids.includes(e.uid) ? 'hitflash' : ''}`}
             onClick={() => e.hp > 0 && tapEnemy(e)}
           >
-            <div class="enemy-intent">{intentText(run, e)}</div>
+            <IntentChip run={run} b={b} e={e} />
             <div class="enemy-figure">
               {enemyArt(e.enemyId)
                 ? <img src={enemyArt(e.enemyId)!} alt={e.name} draggable={false} />
@@ -431,31 +645,43 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
 
       <div class="mid-zone">
         <button class="wuxing-btn" onClick={() => setShowWuxing(true)} title="五行速查">☯五行</button>
-        <div class="xingwei-ring" title="行位：最后打出的有属性牌之五行。打出被其所生的牌触发行云流水。">
-          行位
-          {ELEMENTS.map((el) => (
-            <span
-              key={el}
-              class={`el-dot ${b.xingwei === el ? 'active' : ''}`}
-              style={{ background: `var(--el-${el})` }}
-            >
-              {ELEMENT_NAME[el as Element]}
-            </span>
-          ))}
-          {b.xingwei && <span style={{ color: 'var(--liujin)' }}>→ 接{ELEMENT_NAME[SHENG[b.xingwei]]}</span>}
-        </div>
+        <StanceCompass b={b} goal={zhoutianGoal} murk={compassMurk} />
         <StatusChips statuses={b.player.statuses} />
         <div class="pile-info">
           <span onClick={() => setViewPile('draw')}>抽牌 {b.drawPile.length}</span>
           <span onClick={() => setViewPile('discard')}>弃牌 {b.discardPile.length}</span>
           <span onClick={() => setViewPile('exhaust')}>放逐 {b.exhaustPile.length}</span>
+          <span class="sleeve-count" onClick={() => setViewPile('sleeved')} title="袖藏区：下回合开始先入手">袖 {b.sleeved.length}</span>
           <span>回合 {b.turn}</span>
         </div>
       </div>
 
       <div class="hand-zone">
         {b.player.block > 0 && (
-          <div style={{ textAlign: 'center', fontSize: '14px', color: 'var(--dailan)' }}>🛡 护体 {b.player.block}</div>
+          <div class={`player-block blk-${blockEl}`} title={`护体属性：${elName(blockEl)}。敌攻克护体挡半，护体克敌攻倍挡，无属性恒 1:1。`}>
+            🛡 {elName(blockEl)} · 护体 {b.player.block}
+            {blkDanger && <span class="blk-arrow down" title="敌方来袭克制你的护体：每 1 伤耗 2 护体">▼</span>}
+            {blkStrong && <span class="blk-arrow up" title="你的护体克制敌方来袭：每 2 伤耗 1 护体">▲</span>}
+          </div>
+        )}
+        {selectedDualDef && selectedCard && (
+          <div class="dual-pick-bar">
+            定行：
+            <button
+              class={dualPick === 'a' ? 'on' : ''}
+              style={{ borderColor: EL_COLOR[selectedDualDef.elements[0]] }}
+              onClick={() => setDualPick('a')}
+            >
+              {ELEMENT_NAME[selectedDualDef.elements[0]]}
+            </button>
+            <button
+              class={dualPick === 'b' ? 'on' : ''}
+              style={{ borderColor: EL_COLOR[selectedDualDef.elements[1]] }}
+              onClick={() => setDualPick('b')}
+            >
+              {ELEMENT_NAME[selectedDualDef.elements[1]]}
+            </button>
+          </div>
         )}
         <div class="hand-cards">
           {b.hand.map((c, i) => {
@@ -474,6 +700,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
               const off = i - mid;
               transform = `rotate(${(off * ang).toFixed(1)}deg) translateY(${(off * off * 2.2).toFixed(1)}px)`;
             }
+            const dq = willDeqi(c);
             return (
               <div
                 key={c.uid}
@@ -485,12 +712,13 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
                 onPointerUp={(ev) => onCardPointerUp(ev as unknown as PointerEvent)}
                 onPointerCancel={() => updateDrag(null)}
               >
-                <CardView
+                <CardFace
                   card={c}
                   cost={getCard(c.cardId).cost === 'X' ? 'X' : cardCost(run, b, c)}
                   selected={isSel}
                   unplayable={!canPlay(run, b, c)}
-                  liushuiGlow={glows(c.cardId)}
+                  deqiGlow={dq.deqi}
+                  deqiSide={dq.side}
                 />
               </div>
             );
@@ -501,23 +729,35 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
             {dragTargeting ? '拖到敌人身上松手释放' : drag?.overLine ? '松手打出' : '上滑过此线打出'}
           </div>
         )}
-        {(awaitingTarget || awaitingConfirm || (!anyPlayable && !choice)) && (
+        {(awaitingTarget || awaitingConfirm || (!anyPlayable && !choice)) && !sleeveOpen && (
           <div class={`action-hint ${awaitingTarget ? 'hint-target' : ''}`}>
-            {potionTarget
-              ? '⬆ 点选丹药目标'
-              : awaitingTarget
-                ? `⬆ 点选上方敌人，释放【${getCard(selectedCard!.cardId).name}】`
-                : awaitingConfirm
-                  ? `再点一次【${getCard(selectedCard!.cardId).name}】打出`
-                  : '灵气不足或无可出之牌，点右下【结束回合】'}
+            {awaitingTarget
+              ? `⬆ 点选上方敌人，释放【${getCard(selectedCard!.cardId).name}】`
+              : awaitingConfirm
+                ? `再点一次【${getCard(selectedCard!.cardId).name}】打出`
+                : '灵气不足或无可出之牌，点右下【结束回合】'}
           </div>
         )}
         <div class="battle-bottom">
-          <div class="energy-orb" title="灵气">{b.player.energy}/{run.energyMax}</div>
-          <PotionBar run={run} onUse={usePotion} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div class="energy-orb" title={run.realm === 'lianqi' ? '灵气（炼气期每回合 4，不储存）' : `气海存灵 ${b.player.energy}/${run.poolCap}（跨回合保留）`}>
+              {b.player.energy}
+            </div>
+            {run.realm !== 'lianqi' && (
+              <div class="pool-gauge" title={`气海：存灵 ${b.player.energy}/${run.poolCap}`}>
+                <div class="pool-ticks">
+                  {Array.from({ length: run.poolCap }, (_, i) => (
+                    <span key={i} class={`pool-tick ${i < Math.min(b.player.energy, run.poolCap) ? 'on' : ''}`} />
+                  ))}
+                </div>
+                <span>存灵 {b.player.energy}/{run.poolCap}</span>
+              </div>
+            )}
+          </div>
+          <ElixirBar run={run} onUse={(id) => dispatch({ t: 'USE_ELIXIR', elixir: id })} />
           <button
             class={`endturn ${!anyPlayable && !choice ? 'attention' : ''}`}
-            onClick={() => { setSelected(null); dispatch({ t: 'END_TURN' }); }}
+            onClick={onEndTurnClick}
           >
             结束回合
           </button>
@@ -538,6 +778,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
             {g.name}
           </div>
         ))}
+        {zhoutianFx && <div class="zhoutian-ring" />}
       </div>
 
       {banner && <div class="turn-banner" key={banner}>{banner}</div>}
@@ -549,7 +790,7 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
         />
       )}
 
-      {guideStep < GUIDE_STEPS.length && !choice && !showDialogue && (
+      {guideStep < GUIDE_STEPS.length && !choice && !showDialogue && !sleeveOpen && (
         <div class="guide-toast">
           <span class="guide-num">{guideStep + 1}/{GUIDE_STEPS.length}</span>
           <span class="guide-text">{GUIDE_STEPS[guideStep]}</span>
@@ -562,11 +803,13 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
           <div class="panel">
             <h3>五行速查</h3>
             <div class="wuxing-sheet">
-              <p><b>相生（连招顺序）</b>：木 → 火 → 土 → 金 → 水 → 木</p>
-              <p>按顺序打出相生的牌触发【行云流水】：本牌效果 +25%，返还 1 灵气（每回合上限 2）。连续触发 4 次为【五行周天】：抽 2 张，下一张牌 0 费。无属性牌不打断连招。</p>
-              <p><b>相克（打克制属性的敌人，伤害 ×1.5 并附加异常）</b></p>
-              <p>金克木 → 破甲（敌人无法获得护体）<br />木克土 → 缠缚（敌人下次攻击减伤）<br />土克水 → 滞涩（敌人行动延迟 1 回合）<br />水克火 → 熄灭（移除敌人 1 层增益）<br />火克金 → 熔穿（附加 3 层灼烧）</p>
-              <p><b>操作</b>：点选手牌后，攻击牌点敌人释放；其他牌再点一次打出。敌人头顶为下回合意图，🗡 数字可用护体抵挡。</p>
+              <p><b>相生（得气顺序）</b>：木 → 火 → 土 → 金 → 水 → 木</p>
+              <p>行位 = 最后打出的有属性牌之行（罗盘高亮）。打出被行位<b>所生</b>之行的牌【得气】：卡面第二行（灰墨的得气段）点亮生效。打出<b>克制行位</b>之行的牌【滞气】：下一张有属性牌无法得气。无属性牌不改行位、不断链。</p>
+              <p>一回合内沿相生打满五行（{run.fruits.includes('yiqihuasanqing') ? '一气化三清：任意 4 行' : '五行各一次'}）触发【五行周天】：吐纳 +3，且下一张有得气段的牌双段齐发（天人合一，罗盘金环旋转时打出即可）。</p>
+              <p><b>相克 ·【克伐】</b>（用克制敌人属性的攻击牌触发，各克向功能不同）</p>
+              <p>金克木 →【剪伐】移除目标至多 2 层增益，每层此击 +4 伤<br />木克土 →【破土】目标护体减半，本回合无法再获护体<br />土克水 →【滞涩】目标意图延迟 1 回合<br />水克火 →【浇熄】取消蓄力，否则移除 1 层增益<br />火克金 →【熔锻】此击 50% 伤害无视护体，并【软化】目标</p>
+              <p><b>护体属性</b>：防御牌产生同行护体（护体条染色）。敌攻克你护体 = 挡半（▼）；你护体克敌攻 = 倍挡（▲）；无属性恒 1:1。</p>
+              <p><b>操作</b>：点选手牌后，攻击牌点敌人释放；其他牌再点一次打出。结束回合时可袖藏手牌至下回合。</p>
             </div>
             <div style={{ textAlign: 'center' }}><button onClick={() => setShowWuxing(false)}>关闭</button></div>
           </div>
@@ -575,41 +818,129 @@ export function BattleScreen(props: { run: RunState; dispatch: (a: Action) => vo
 
       {b.log.length > 0 && <div class="battle-log">{b.log[b.log.length - 1]}</div>}
 
+      {/* 敌人详情：属性 + 克伐提示（§4.4④⑤） */}
+      {detailEnemy && (
+        <div class="overlay" onClick={(e) => { if (e.target === e.currentTarget) setEnemyDetail(null); }}>
+          <div class="panel">
+            <h3><ElBadge el={detailEnemy.element} /> {detailEnemy.name}</h3>
+            <div class="enemy-detail-rows">
+              <div class="ed-row">气血 {detailEnemy.hp}/{detailEnemy.maxHp}{detailEnemy.block > 0 ? ` · 护体 ${detailEnemy.block}` : ''}</div>
+              {detailEnemy.element !== 'none' ? (
+                <>
+                  <div class="ed-row ed-kefa">
+                    克伐：以<b>{ELEMENT_NAME[counterElement(detailEnemy.element as Element)]}</b>行攻击牌击之，触发
+                    【{KEFA_NAME[KEFA_VERB[counterElement(detailEnemy.element as Element)]]}】。
+                    同行护体（{ELEMENT_NAME[counterElement(detailEnemy.element as Element)]}）克其来攻，可倍挡（▲）。
+                  </div>
+                  <div class="ed-row ed-warn">
+                    其攻击带<b>{ELEMENT_NAME[detailEnemy.element as Element]}</b>行：克制
+                    {ELEMENT_NAME[KE[detailEnemy.element as Element]]}属护体（挡半 ▼），慎用该行防御。
+                  </div>
+                </>
+              ) : (
+                <div class="ed-row">无属性：不受克伐，与护体恒为 1:1 结算。</div>
+              )}
+              {Object.entries(detailEnemy.statuses).filter(([k, v]) => (v ?? 0) !== 0 && !k.startsWith('_')).length > 0 && (
+                <div class="ed-row"><StatusChips statuses={detailEnemy.statuses} /></div>
+              )}
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '12px' }}><button onClick={() => setEnemyDetail(null)}>关闭</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* 袖藏浮层（结束回合两步，§13.3） */}
+      {sleeveOpen && (
+        <div class="sleeve-sheet">
+          <div class="sleeve-head">
+            <h4>袖藏</h4>
+            <span class={`sleeve-cap ${sleeveBanned ? 'banned' : ''}`}>
+              {sleeveBanned
+                ? '被封（无法袖藏）'
+                : sleeveUnlimited
+                  ? '无上限（北冥吞天）'
+                  : `选择至多 ${sleeveCap} 张收入袖中，下回合开始先入手`}
+            </span>
+          </div>
+          <div class="sleeve-cards">
+            {b.hand.map((c) => (
+              <CardFace
+                key={c.uid}
+                card={c}
+                picked={sleevePicks.includes(c.uid)}
+                unplayable={sleeveBanned}
+                onClick={() => toggleSleevePick(c.uid)}
+              />
+            ))}
+          </div>
+          <div class="sleeve-actions">
+            <button onClick={() => confirmEndTurn([])}>
+              不袖藏<span class="skip-key">（N）</span>
+            </button>
+            <button class="primary" disabled={sleeveBanned && sleevePicks.length > 0} onClick={() => confirmEndTurn(sleevePicks)}>
+              {sleevePicks.length > 0 ? `袖藏 ${sleevePicks.length} 张并结束` : '结束回合'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {viewPile && (
         <DeckModal
-          title={viewPile === 'draw' ? '抽牌堆（不按顺序）' : viewPile === 'discard' ? '弃牌堆' : '放逐牌'}
-          cards={viewPile === 'draw' ? [...b.drawPile].sort((a, b2) => a.cardId.localeCompare(b2.cardId)) : viewPile === 'discard' ? b.discardPile : b.exhaustPile}
+          title={viewPile === 'draw' ? '抽牌堆（不按顺序）' : viewPile === 'discard' ? '弃牌堆' : viewPile === 'exhaust' ? '放逐牌' : '袖藏区（下回合先入手）'}
+          cards={
+            viewPile === 'draw' ? [...b.drawPile].sort((a, b2) => a.cardId.localeCompare(b2.cardId))
+              : viewPile === 'discard' ? b.discardPile
+                : viewPile === 'exhaust' ? b.exhaustPile
+                  : b.sleeved
+          }
           onClose={() => setViewPile(null)}
         />
       )}
 
+      {/* pendingChoice：dilemma 竹签按钮（含河图五行选项染色） */}
       {choice && choice.kind === 'dilemma' && (
         <div class="overlay">
           <div class="panel">
             <h3>{choice.prompt}</h3>
             <div class="dilemma-options">
-              {choice.options?.map((opt, i) => (
-                <button key={i} onClick={() => dispatch({ t: 'RESOLVE_CHOICE', picks: [i] })}>{opt}</button>
-              ))}
+              {choice.options?.map((opt, i) => {
+                const el = ELEMENTS.find((e) => opt.includes(ELEMENT_NAME[e]));
+                return (
+                  <button
+                    key={i}
+                    class={`zhuqian ${el ? 'el-tinted' : ''}`}
+                    style={el ? { '--zhuqian-el': EL_COLOR[el] } : undefined}
+                    onClick={() => dispatch({ t: 'RESOLVE_CHOICE', picks: [i] })}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
+      {/* pendingChoice：卡列表类（scry / pickTop / exhaustHand / discardHand / returnHand），按 maxPick 多选/单选 */}
       {choice && choice.kind !== 'dilemma' && (
         <DeckModal
           title={choice.prompt}
+          sub={
+            choice.kind === 'scry' ? '点选要弃去的牌（可不选）'
+              : choice.kind === 'pickTop' ? `点选入手的牌（至多 ${choice.maxPick ?? 1} 张）`
+                : choice.kind === 'exhaustHand' ? '点选要放逐的手牌（任意张）'
+                  : choice.kind === 'discardHand' ? '点选要弃去的手牌（任意张）'
+                    : '点选要洗回牌库的手牌（任意张）'
+          }
           cards={choice.cards ?? []}
           pickedUids={pickedUids}
           onPick={(uid) => {
-            if (choice.kind === 'pickHand' || choice.kind === 'pickDiscard') {
-              dispatch({ t: 'RESOLVE_CHOICE', picks: [uid] });
-              setPickedUids([]);
-              return;
-            }
-            setPickedUids((prev) =>
-              prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid],
-            );
+            const cap = choice.kind === 'pickTop' ? (choice.maxPick ?? 1) : (choice.maxPick ?? Infinity);
+            setPickedUids((prev) => {
+              if (prev.includes(uid)) return prev.filter((x) => x !== uid);
+              if (prev.length >= cap) return cap === 1 ? [uid] : prev; // 上限 1 时点新卡直接换选
+              return [...prev, uid];
+            });
           }}
           onClose={() => { /* 必须选择 */ }}
           footer={

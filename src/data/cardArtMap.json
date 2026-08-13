@@ -638,5 +638,29 @@
   "museum": "The Cleveland Museum of Art",
   "license": "CC0",
   "url": "https://clevelandart.org/art/2004.1.48"
+ },
+ "shouzhong": {
+  "file": "/assets/cardart/shouzhong.webp",
+  "title": "Sheer Cliffs",
+  "creator": "Min Zhen (Chinese, 1730–after 1788)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1985.71.12"
+ },
+ "runfeng": {
+  "file": "/assets/cardart/runfeng.webp",
+  "title": "Scholar Watching the Waterfall",
+  "creator": "Luo Ping (Chinese, 1733–1799)",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1975.95"
+ },
+ "canjuan": {
+  "file": "/assets/cardart/canjuan.webp",
+  "title": "Text of the Perfection of Wisdom (Mahāprajñāpāramitā) Sūtra",
+  "creator": "佚名",
+  "museum": "The Cleveland Museum of Art",
+  "license": "CC0",
+  "url": "https://clevelandart.org/art/1933.454"
  }
 }

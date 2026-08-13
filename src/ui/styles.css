@@ -894,3 +894,368 @@ button.ghost { background: transparent; border-color: rgba(43,43,43,0.35); }
 .settings-row input[type='range'] { flex: 1; accent-color: var(--zhusha); }
 
 .dilemma-options { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+
+/* ==================== v3 新增（两行卡面 / 罗盘 / 顶栏计量 / 袖藏 / 克伐） ==================== */
+
+/* ---------- 护体属性色（金白/木青/水黛/火朱/土赭/无属性墨灰） ---------- */
+:root {
+  --blk-metal: #c8bfa4;
+  --blk-wood: #3f7d3a;
+  --blk-water: #3b5b7a;
+  --blk-fire: #c3272b;
+  --blk-earth: #9a6a32;
+  --blk-none: #6b6b6b;
+}
+
+/* ---------- 两行卡面：得气段（§13.2 界面3 核心 UI） ---------- */
+.wcard .c-sheng {
+  position: relative;
+  margin-top: 2px;
+  padding: 1px 3px 2px;
+  font-size: 10px;
+  line-height: 1.3;
+  color: #4a4438;
+  opacity: 0.55;
+  border-top: 1px dashed rgba(43, 43, 43, 0.3);
+  overflow: hidden;
+  transition: opacity 0.14s ease-out, color 0.14s ease-out;
+}
+.wcard .c-sheng .c-sheng-tag {
+  display: inline-block;
+  font-size: 9px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  padding: 0 2px;
+  margin-right: 3px;
+  line-height: 11px;
+  vertical-align: 1px;
+}
+/* 点亮：鎏金 + 140ms 扫光（§13.4 得气段点亮） */
+.wcard .c-sheng.lit {
+  opacity: 1;
+  color: #7a5a08;
+  font-weight: 700;
+  border-top-color: rgba(184, 134, 11, 0.75);
+}
+.wcard .c-sheng.lit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 223, 128, 0.85) 50%, transparent 80%);
+  animation: shengSweep 0.14s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes shengSweep {
+  0% { transform: translateX(-110%); opacity: 1; }
+  100% { transform: translateX(110%); opacity: 0; }
+}
+/* 卡缘泛金（将得气） */
+.wcard.deqi-glow {
+  box-shadow: 0 0 0 2.5px var(--liujin), 0 3px 12px rgba(184, 134, 11, 0.6);
+}
+
+/* ---------- 双行牌两栏（润锋等，§4.4①） ---------- */
+.wcard .c-dual { display: flex; gap: 3px; padding-top: 2px; }
+.wcard .c-dual-side {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(43, 43, 43, 0.28);
+  border-radius: 3px;
+  padding: 2px 3px;
+  font-size: 9.5px;
+  line-height: 1.28;
+  color: #3a352c;
+  background: rgba(255, 253, 248, 0.5);
+  transition: box-shadow 0.14s;
+}
+.wcard .c-dual-side.lit {
+  border-color: var(--liujin);
+  box-shadow: 0 0 5px rgba(184, 134, 11, 0.65) inset;
+  color: #7a5a08;
+  font-weight: 700;
+}
+.wcard .c-dual-el {
+  display: inline-block;
+  font-size: 9px;
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 3px;
+  margin-right: 2px;
+  line-height: 12px;
+}
+.wcard .c-dual-text { word-break: break-all; }
+
+/* ---------- 顶栏 v3：两行（主行 + 计量行） ---------- */
+.topbar { flex-direction: column; align-items: stretch; gap: 3px; }
+.topbar-main { display: flex; align-items: center; gap: 10px; }
+.topbar-sub { display: flex; align-items: center; gap: 12px; min-height: 16px; flex-wrap: wrap; }
+.topbar .meter-label { font-size: 10px; color: var(--dailan); margin-right: 2px; }
+/* 寿元漏刻 */
+.topbar .lifespan { color: var(--dailan); font-weight: 700; white-space: nowrap; }
+.topbar .lifespan.low { color: var(--zhusha); animation: lifespanBlink 1.4s infinite; }
+@keyframes lifespanBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+/* 心魔珠（0–9，亮暗） */
+.demon-beads { display: inline-flex; align-items: center; gap: 2.5px; }
+.demon-beads .bead {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(43, 43, 43, 0.14);
+  border: 1px solid rgba(43, 43, 43, 0.3);
+  transition: background 0.25s, box-shadow 0.25s;
+}
+.demon-beads .bead.mark { border-color: rgba(90, 42, 90, 0.55); }
+.demon-beads .bead.on {
+  background: radial-gradient(circle at 35% 30%, #8a5c8a, #3d2140);
+  border-color: #3d2140;
+  box-shadow: 0 0 4px rgba(90, 42, 100, 0.7);
+}
+/* 丹毒鼎（0–12，≥4/≥8/=12 三档变色） */
+.toxin-dings { display: inline-flex; align-items: center; gap: 2px; }
+.toxin-dings .ding {
+  width: 7px; height: 8px;
+  background: rgba(43, 43, 43, 0.12);
+  border: 1px solid rgba(43, 43, 43, 0.28);
+  border-radius: 1.5px 1.5px 3px 3px;
+  transition: background 0.25s;
+}
+.toxin-dings .ding.mark { border-color: rgba(43, 43, 43, 0.5); }
+.toxin-dings.t0 .ding.on { background: #7f8c6b; border-color: #5d6a4c; }
+.toxin-dings.t1 .ding.on { background: #a8842c; border-color: #7a5f1c; }
+.toxin-dings.t2 .ding.on { background: #b35418; border-color: #7d3a10; }
+.toxin-dings.t3 .ding.on { background: #8a1f1f; border-color: #5c1313; animation: lifespanBlink 1.2s infinite; }
+/* 顶栏丹盒（紧凑） */
+.topbar-elixirs { margin-left: auto; }
+.elixir-bar.compact { gap: 3px; }
+.elixir-bar.compact .potion { width: 22px; height: 22px; font-size: 12px; border-width: 1px; }
+
+/* ---------- 丹盒（战斗底部，带丹名） ---------- */
+.potion.elixir { flex-direction: column; gap: 0; width: 46px; height: 46px; }
+.potion.elixir .elixir-icon { font-size: 16px; line-height: 18px; }
+.potion.elixir .elixir-name { font-size: 9px; color: #6d5716; line-height: 11px; white-space: nowrap; }
+.elixir-bar.compact .potion.elixir { width: 22px; height: 22px; }
+
+/* ---------- 行位罗盘（五行环 + 周天进度，§13.2 界面3） ---------- */
+.stance-compass {
+  position: relative;
+  width: 62px; height: 62px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(43, 43, 43, 0.3);
+  background: rgba(255, 252, 245, 0.7);
+  transition: filter 0.18s ease-in;
+}
+.compass-dot {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 19px; height: 19px;
+  margin: -9.5px 0 0 -9.5px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: 10.5px;
+  opacity: 0.38;
+  transition: opacity 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.compass-dot.active {
+  opacity: 1;
+  box-shadow: 0 0 7px var(--liujin), 0 0 0 2px rgba(184, 134, 11, 0.8);
+  font-weight: 700;
+}
+/* 下一环（所生之行）呼吸提示 */
+.compass-dot.next { opacity: 0.9; animation: nextBreathe 1.5s ease-in-out infinite; }
+@keyframes nextBreathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(184, 134, 11, 0); }
+  50% { box-shadow: 0 0 8px 2px rgba(184, 134, 11, 0.75); }
+}
+.compass-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-size: 9px; color: var(--dailan);
+  pointer-events: none;
+}
+/* 周天进度小点（chain x/5） */
+.chain-dots { display: flex; gap: 2px; margin-top: 1px; }
+.chain-dots .chain-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(43, 43, 43, 0.15);
+  border: 0.5px solid rgba(43, 43, 43, 0.3);
+}
+.chain-dots .chain-dot.on { border-color: transparent; box-shadow: 0 0 3px rgba(184, 134, 11, 0.6); }
+/* 滞气：罗盘蒙墨浊 180ms */
+.stance-compass.murk { filter: grayscale(0.9) brightness(0.55) blur(0.6px); }
+/* 天人合一待发：金环旋转 */
+.stance-compass.tianren::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--liujin);
+  border-right-color: rgba(229, 181, 68, 0.85);
+  animation: tianrenSpin 1.2s linear infinite;
+  pointer-events: none;
+}
+@keyframes tianrenSpin { to { transform: rotate(360deg); } }
+/* 周天触发：900ms 五色环绕（非阻塞，§13.4） */
+.zhoutian-ring {
+  position: absolute;
+  left: 50%; top: 34%;
+  width: 150px; height: 150px;
+  margin: -75px 0 0 -75px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 46;
+  background: conic-gradient(var(--el-wood), var(--el-fire), var(--el-earth), var(--el-metal), var(--el-water), var(--el-wood));
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 62%, #000 78%, transparent 82%);
+  mask: radial-gradient(circle, transparent 58%, #000 62%, #000 78%, transparent 82%);
+  animation: zhoutianRing 0.9s ease-out forwards;
+}
+@keyframes zhoutianRing {
+  0% { transform: scale(0.3) rotate(0deg); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: scale(1.35) rotate(300deg); opacity: 0; }
+}
+
+/* ---------- 玩家护体条（按 blockElement 染色 + 生克箭头） ---------- */
+.player-block {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  margin: 0 auto 2px;
+  width: fit-content;
+  font-size: 13.5px; font-weight: 700;
+  padding: 2px 12px;
+  border-radius: 12px;
+  color: #fff;
+  background: var(--blk-none);
+  box-shadow: 0 1px 5px rgba(43, 43, 43, 0.3);
+}
+.player-block.blk-metal { background: var(--blk-metal); color: #4a4128; }
+.player-block.blk-wood { background: var(--blk-wood); }
+.player-block.blk-water { background: var(--blk-water); }
+.player-block.blk-fire { background: var(--blk-fire); }
+.player-block.blk-earth { background: var(--blk-earth); }
+.player-block.blk-none { background: var(--blk-none); }
+.blk-arrow { font-size: 12px; line-height: 1; animation: arrowNudge 1.1s infinite; }
+.blk-arrow.down { color: #ff8a80; text-shadow: 0 0 4px rgba(140, 0, 0, 0.9); }
+.blk-arrow.up { color: #ffdf80; text-shadow: 0 0 4px rgba(122, 90, 8, 0.9); }
+@keyframes arrowNudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+
+/* ---------- 敌意图：攻击染敌五行色 ---------- */
+.enemy-intent { border-left: 3px solid transparent; }
+.enemy-intent .intent-atk { font-weight: 700; }
+
+/* ---------- 敌人详情弹层（属性与克伐提示） ---------- */
+.enemy-detail-rows { display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.7; }
+.enemy-detail-rows .ed-row {
+  background: rgba(255, 252, 245, 0.85);
+  border: 1px solid rgba(43, 43, 43, 0.22);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+.enemy-detail-rows .ed-kefa { border-left: 3px solid var(--liujin); }
+.enemy-detail-rows .ed-warn { border-left: 3px solid var(--zhusha); }
+
+/* ---------- 袖藏浮层（结束回合两步，§13.3） ---------- */
+.sleeve-sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  max-height: 62dvh;
+  background: linear-gradient(180deg, rgba(250, 246, 236, 0.97), rgba(242, 235, 220, 0.99));
+  border-top: 2px solid var(--ink);
+  border-radius: 14px 14px 0 0;
+  z-index: 55;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 8px;
+  animation: sleeveUp 0.2s ease-out;
+  box-shadow: 0 -6px 24px rgba(43, 43, 43, 0.35);
+}
+@keyframes sleeveUp { from { transform: translateY(40%); opacity: 0; } to { transform: none; opacity: 1; } }
+.sleeve-head { display: flex; align-items: baseline; gap: 8px; }
+.sleeve-head h4 { margin: 0; letter-spacing: 3px; font-size: 16px; }
+.sleeve-head .sleeve-cap { font-size: 12.5px; color: var(--dailan); }
+.sleeve-head .sleeve-cap.banned { color: var(--zhusha); font-weight: 700; }
+.sleeve-cards {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.sleeve-cards .wcard { margin: 0; cursor: pointer; }
+.sleeve-cards .wcard.picked { outline: 3px solid var(--liujin); transform: translateY(-6px); }
+.sleeve-actions { display: flex; gap: 10px; justify-content: center; }
+.sleeve-actions .skip-key { font-size: 11px; color: var(--dailan); opacity: 0.8; margin-left: 4px; }
+/* 袖藏区入口（牌堆旁张数） */
+.pile-info .sleeve-count { color: #6d5716; font-weight: 700; }
+
+/* ---------- 克伐飘字（250ms 动词演出，§13.4） ---------- */
+.f-kefa {
+  color: #a3541c;
+  font-size: 24px;
+  letter-spacing: 3px;
+  animation: kefaPop 0.25s cubic-bezier(0.2, 1.4, 0.4, 1) backwards, floatUp 1.6s ease-out forwards;
+}
+@keyframes kefaPop {
+  0% { transform: translate(-50%, -50%) scale(2.2) rotate(-6deg); filter: blur(2px); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(0); filter: none; }
+}
+/* 得气飘字 */
+.f-deqi { color: var(--liujin); font-size: 21px; letter-spacing: 2px; }
+/* 滞气飘字 */
+.f-zhiqi { color: #45413a; font-size: 20px; letter-spacing: 2px; }
+/* Boss 提示（诛心/问道等）沿用 log 飘字 */
+.f-boss { color: #5a2a5a; font-size: 20px; letter-spacing: 2px; }
+
+/* ---------- 竹签按钮（dilemma，§13.2 界面6） ---------- */
+.dilemma-options button.zhuqian {
+  text-align: left;
+  position: relative;
+  padding-left: 32px;
+  background: linear-gradient(180deg, #f3ecd8, #e8dfc4);
+  border: 1.5px solid #9d8a5a;
+  border-radius: 4px 14px 14px 4px;
+}
+.dilemma-options button.zhuqian::before {
+  content: '';
+  position: absolute;
+  left: 12px; top: 20%; bottom: 20%;
+  width: 4px;
+  border-radius: 2px;
+  background: #9d8a5a;
+}
+.dilemma-options button.zhuqian.el-tinted::before { background: var(--zhuqian-el, #9d8a5a); }
+
+/* ---------- 双行牌定行选择条 ---------- */
+.dual-pick-bar {
+  display: flex; gap: 8px; justify-content: center; align-items: center;
+  margin: 0 auto 4px;
+  font-size: 13px;
+  background: rgba(43, 43, 43, 0.82);
+  color: var(--paper);
+  border-radius: 14px;
+  padding: 4px 12px;
+  width: fit-content;
+  animation: fadein 0.2s;
+}
+.dual-pick-bar button {
+  min-height: 30px;
+  padding: 2px 12px;
+  font-size: 13px;
+  color: #fff;
+  border-width: 1.5px;
+  background: transparent;
+}
+.dual-pick-bar button.on { background: rgba(255, 255, 255, 0.18); box-shadow: 0 0 0 2px var(--liujin); }
+
+/* ---------- 气海刻度（筑基后，能量球旁存灵/上限） ---------- */
+.pool-gauge {
+  display: flex; flex-direction: column; align-items: center;
+  font-size: 10.5px; color: var(--dailan);
+  gap: 2px;
+}
+.pool-gauge .pool-ticks { display: flex; gap: 2px; }
+.pool-gauge .pool-tick {
+  width: 5px; height: 10px;
+  border: 1px solid rgba(74, 85, 104, 0.6);
+  border-radius: 1.5px;
+  background: rgba(74, 85, 104, 0.12);
+}
+.pool-gauge .pool-tick.on { background: var(--dailan); }
+

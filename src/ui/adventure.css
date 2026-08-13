@@ -1,0 +1,649 @@
+/* ============================================================
+   冒险层界面 v3 样式（Adventure.tsx 专用；水墨风，复用 styles.css 变量
+   --paper/--ink/--zhusha/--liujin/--dailan 与 overlay/panel/screen-page 骨架）
+   布局取向：竖屏单手——主行动按钮沉底、货架纵向卷动。
+   ============================================================ */
+
+/* ---------- 通用 ---------- */
+
+.adv-spacer { flex: 1; }
+
+.adv-go {
+  width: 100%;
+  max-width: 420px;
+  min-height: 48px;
+  font-size: 17px;
+  letter-spacing: 8px;
+}
+
+.adv-panel-foot { text-align: center; margin-top: 12px; }
+
+.liujin-text { color: var(--liujin); }
+.seed-text { user-select: all; }
+
+/* 卡牌选取包装（CardFace 外壳：点击/选中/灰锁） */
+.adv-cardwrap {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.adv-cardwrap.sel { outline: 3px solid var(--zhusha); outline-offset: 2px; border-radius: 8px; }
+.adv-cardwrap.locked { cursor: default; }
+.adv-cardwrap.locked > :first-child { opacity: 0.35; filter: grayscale(0.8); }
+.adv-cardlock {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  background: rgba(43, 43, 43, 0.85);
+  color: var(--paper);
+  font-size: 12px;
+  letter-spacing: 2px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.adv-cardgrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ---------- 战利 ---------- */
+
+.adv-reward-line {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.adv-reward-mats .yaodeng { font-size: 17px; }
+
+.mat-chip {
+  display: inline-block;
+  background: rgba(63, 125, 58, 0.12);
+  border: 1px solid rgba(63, 125, 58, 0.4);
+  color: #2f5d2b;
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.adv-reward-cards { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.adv-reward-cards .adv-cardwrap { animation: adv-flipin 0.5s backwards; }
+.adv-reward-cards .adv-cardwrap:nth-child(2) { animation-delay: 0.09s; }
+.adv-reward-cards .adv-cardwrap:nth-child(3) { animation-delay: 0.18s; }
+@keyframes adv-flipin {
+  from { transform: rotateY(90deg); opacity: 0; }
+  to { transform: rotateY(0); opacity: 1; }
+}
+
+.legend-warn {
+  color: var(--zhusha);
+  font-size: 11px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+/* ---------- 坊市 ---------- */
+
+.mirage-tag {
+  background: rgba(59, 91, 122, 0.12);
+  border: 1px dashed var(--dailan);
+  color: var(--dailan);
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.shop-shelf { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.shelf-title {
+  font-size: 14px;
+  letter-spacing: 6px;
+  color: var(--dailan);
+  border-bottom: 1px solid rgba(43, 43, 43, 0.25);
+  padding-bottom: 3px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.shelf-title::before { content: '❙'; color: var(--liujin); }
+
+/* 功法货架：横向卡面卷动 */
+.shelf-cards {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.shelf-cardwrap {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.shelf-cardwrap.sold { opacity: 0.35; }
+.buy-btn {
+  min-height: 32px;
+  padding: 3px 12px;
+  font-size: 13.5px;
+  color: var(--liujin);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.price-old {
+  color: rgba(43, 43, 43, 0.45);
+  font-weight: 400;
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+.shop-row-main { min-width: 0; }
+.shop-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+  align-items: center;
+}
+
+.grade-tag {
+  font-size: 11.5px;
+  color: var(--liujin);
+  border: 1px solid rgba(184, 134, 11, 0.5);
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: 1px;
+}
+.rare-tag {
+  font-size: 11px;
+  color: var(--zhusha);
+  border: 1px solid rgba(195, 39, 43, 0.5);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 5px;
+  vertical-align: 1px;
+}
+.owned-tag {
+  font-size: 11px;
+  color: var(--dailan);
+  border: 1px solid rgba(74, 85, 104, 0.5);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 5px;
+  vertical-align: 1px;
+}
+
+.toxin-chip {
+  font-size: 12px;
+  color: #6b4b8a;
+  background: rgba(107, 75, 138, 0.1);
+  border: 1px solid rgba(107, 75, 138, 0.35);
+  border-radius: 10px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.toxin-chip.good { color: #2f5d2b; background: rgba(63, 125, 58, 0.1); border-color: rgba(63, 125, 58, 0.4); }
+
+/* 静室：蒲团位（斩尘缘）与木鱼位（心斋） */
+.zen-seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 252, 245, 0.85);
+  border: 1px solid rgba(43, 43, 43, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.zen-seat.used { opacity: 0.5; }
+.zen-seat .price { margin-left: auto; color: var(--liujin); font-weight: 700; white-space: nowrap; }
+.zen-seat button { min-height: 34px; padding: 4px 12px; font-size: 14px; }
+.zen-body { min-width: 0; }
+.zen-name { font-weight: 700; }
+.zen-sub { font-weight: 400; font-size: 11.5px; color: var(--dailan); margin-left: 4px; }
+.zen-seat .desc { color: var(--dailan); font-size: 12px; }
+
+/* 蒲团：CSS 画一只圆蒲团 */
+.zen-icon { flex: 0 0 auto; width: 34px; height: 34px; position: relative; }
+.putuan-icon::before {
+  content: '';
+  position: absolute;
+  inset: 8px 2px 6px;
+  border-radius: 50% / 62%;
+  background: radial-gradient(ellipse at 50% 36%, #d8b46a, #a97c34 78%);
+  border: 1.5px solid rgba(43, 43, 43, 0.55);
+}
+.putuan-icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  width: 10px;
+  height: 6px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  border: 1.5px solid rgba(43, 43, 43, 0.4);
+}
+
+/* 木鱼：圆头带一道开口 */
+.muyu-icon::before {
+  content: '';
+  position: absolute;
+  inset: 5px 3px 7px;
+  border-radius: 48% 48% 42% 42%;
+  background: radial-gradient(circle at 42% 34%, #b3803e, #7d5423 80%);
+  border: 1.5px solid rgba(43, 43, 43, 0.55);
+}
+.muyu-icon::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 11px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(30, 20, 8, 0.75);
+}
+.muyu-icon.knock { animation: muyu-knock 0.5s; }
+@keyframes muyu-knock {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.82) rotate(-6deg); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* 心魔珠串：敲木鱼时一颗变暗 */
+.demon-beads { display: flex; gap: 4px; margin-top: 5px; }
+.demon-bead {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(43, 43, 43, 0.12);
+  border: 1px solid rgba(43, 43, 43, 0.3);
+  transition: background 0.4s;
+}
+.demon-bead.lit {
+  background: radial-gradient(circle at 35% 30%, #8a5fae, #4a2a63 75%);
+  border-color: #3a2050;
+  box-shadow: 0 0 4px rgba(107, 75, 138, 0.55);
+}
+.demon-bead.dimming { animation: bead-dim 1s forwards; }
+@keyframes bead-dim {
+  0% {
+    background: radial-gradient(circle at 35% 30%, #8a5fae, #4a2a63 75%);
+    box-shadow: 0 0 8px rgba(107, 75, 138, 0.9);
+    transform: scale(1.35);
+  }
+  100% {
+    background: rgba(43, 43, 43, 0.12);
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+/* ---------- 奇遇 ---------- */
+
+.evt-label { display: inline; }
+
+.evt-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+.evt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  line-height: 1;
+  padding: 2.5px 7px;
+  border-radius: 9px;
+  border: 1px solid rgba(43, 43, 43, 0.3);
+  background: rgba(43, 43, 43, 0.06);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.evt-badge.bad { color: var(--zhusha); border-color: rgba(195, 39, 43, 0.45); background: rgba(195, 39, 43, 0.08); }
+.evt-badge.good { color: #2f5d2b; border-color: rgba(63, 125, 58, 0.45); background: rgba(63, 125, 58, 0.08); }
+.evt-badge.gold { color: var(--liujin); border-color: rgba(184, 134, 11, 0.5); background: rgba(184, 134, 11, 0.08); }
+.evt-badge.multi { color: var(--zhusha); border-style: dashed; }
+.evt-badge .bead {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #8a5fae, #4a2a63 75%);
+  display: inline-block;
+}
+
+.evt-lack { color: rgba(43, 43, 43, 0.5); font-size: 12px; margin-left: 6px; }
+
+.evt-continue { text-align: center; margin-top: 14px; }
+
+/* ---------- 洞府 ---------- */
+
+.free-banner {
+  background: rgba(184, 134, 11, 0.1);
+  border: 1px solid rgba(184, 134, 11, 0.55);
+  color: var(--liujin);
+  border-radius: 6px;
+  padding: 5px 16px;
+  font-size: 13.5px;
+  letter-spacing: 2px;
+}
+
+.cave-remain { font-size: 14px; color: var(--dailan); }
+.cave-remain b { color: var(--zhusha); font-size: 16px; }
+.cave-used { font-size: 13px; }
+
+.cave-actions {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cave-act {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: rgba(255, 252, 245, 0.9);
+  cursor: pointer;
+}
+.cave-act:not(.off):hover { border-color: var(--zhusha); }
+.cave-act.off { opacity: 0.45; cursor: default; }
+.cave-act.done { border-style: dashed; }
+.cave-icon { font-size: 22px; flex: 0 0 auto; }
+.cave-body { min-width: 0; flex: 1; }
+.cave-name { font-size: 16px; font-weight: 700; letter-spacing: 2px; }
+.cave-effect { font-size: 13px; color: var(--dailan); margin-top: 2px; }
+.cave-done-tag,
+.cave-lock-tag {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: 2px;
+}
+.cave-done-tag { color: var(--dailan); border: 1px solid rgba(74, 85, 104, 0.5); }
+.cave-lock-tag { color: #2f5d2b; border: 1px solid rgba(63, 125, 58, 0.5); }
+
+/* 寿元价签 */
+.cave-price {
+  flex: 0 0 auto;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: rgba(184, 134, 11, 0.1);
+  border: 1px solid rgba(184, 134, 11, 0.5);
+  border-radius: 4px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.cave-price.cut { color: #2f5d2b; border-color: rgba(63, 125, 58, 0.55); background: rgba(63, 125, 58, 0.08); }
+.cave-price.free {
+  color: var(--liujin);
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.cave-note { font-size: 12px; color: var(--dailan); }
+
+/* 炼丹子面板 */
+.brew-panel { max-width: 460px; }
+.brew-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.brew-list { display: flex; flex-direction: column; gap: 8px; }
+.brew-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 252, 245, 0.85);
+  border: 1px solid rgba(43, 43, 43, 0.3);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.brew-item.off { opacity: 0.55; }
+.brew-main { min-width: 0; flex: 1; }
+.brew-name { font-weight: 700; font-size: 14.5px; }
+.brew-text { font-size: 12.5px; color: var(--dailan); margin: 2px 0 4px; }
+.brew-mats { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.mat-req {
+  font-size: 12px;
+  color: #2f5d2b;
+  background: rgba(63, 125, 58, 0.1);
+  border: 1px solid rgba(63, 125, 58, 0.4);
+  border-radius: 10px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.mat-req.lack { color: var(--zhusha); background: rgba(195, 39, 43, 0.08); border-color: rgba(195, 39, 43, 0.45); }
+.brew-btn { min-height: 38px; padding: 4px 14px; font-size: 14px; letter-spacing: 2px; white-space: nowrap; }
+.brew-warn { color: var(--zhusha); }
+
+/* ---------- 道果 ---------- */
+
+.daoguo-banner {
+  width: 100%;
+  max-width: 460px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fdf9ee, #f3ecd8);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  animation: dg-in 0.6s backwards;
+}
+@keyframes dg-in {
+  from { transform: translateY(-14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.dg-stage {
+  writing-mode: vertical-rl;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 10px;
+  color: var(--zhusha);
+  border-right: 1px solid rgba(43, 43, 43, 0.25);
+  padding-right: 12px;
+  flex: 0 0 auto;
+}
+.dg-rules { display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.6; }
+.dg-rule b { color: var(--liujin); letter-spacing: 1px; }
+.dg-rule.dim { color: var(--dailan); font-size: 12.5px; }
+
+.daoguo-seals {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: stretch;
+}
+.daoguo-seal {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 2px solid rgba(195, 39, 43, 0.75);
+  border-radius: 8px;
+  background: rgba(255, 252, 245, 0.94);
+  box-shadow: 2px 3px 0 rgba(195, 39, 43, 0.18);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  animation: seal-stamp 0.45s backwards;
+}
+.daoguo-seal:hover { background: rgba(195, 39, 43, 0.06); transform: translateY(-2px); }
+@keyframes seal-stamp {
+  0% { transform: scale(1.5); opacity: 0; }
+  60% { transform: scale(0.94); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.seal-name {
+  writing-mode: vertical-rl;
+  background: var(--zhusha);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  padding: 8px 5px;
+  border-radius: 4px;
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+}
+.seal-text { font-size: 12px; color: var(--ink); line-height: 1.55; text-align: center; }
+
+/* ---------- 结算：宿慧与业力秤 ---------- */
+
+.zuohua-line {
+  font-size: 24px;
+  letter-spacing: 5px;
+  color: var(--zhusha);
+  margin: 8px 0 2px;
+  font-weight: 700;
+}
+
+.legacy-box {
+  width: 100%;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fdf9ee, #f6efdd);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.legacy-title { font-size: 19px; letter-spacing: 8px; font-weight: 700; }
+.legacy-hint { font-size: 12px; }
+
+.legacy-tabs { display: flex; gap: 8px; width: 100%; }
+.legacy-tabs button { flex: 1; min-height: 40px; font-size: 14px; }
+.legacy-tabs button.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.legacy-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+  max-height: 42dvh;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.karma-chip {
+  font-size: 11px;
+  color: #6b4b8a;
+  border: 1px solid rgba(107, 75, 138, 0.5);
+  background: rgba(107, 75, 138, 0.08);
+  border-radius: 9px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.legacy-relics {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 42dvh;
+  overflow-y: auto;
+}
+.legacy-relic {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 252, 245, 0.85);
+  border: 1.5px solid rgba(43, 43, 43, 0.3);
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.legacy-relic.sel { border-color: var(--zhusha); box-shadow: 0 0 0 1px var(--zhusha); }
+.lr-main { min-width: 0; flex: 1; }
+.lr-name { font-weight: 700; font-size: 14.5px; }
+.lr-text { font-size: 12px; color: var(--dailan); margin-top: 2px; }
+
+.legacy-daoxing { text-align: center; padding: 14px 0; }
+.ld-big { font-size: 30px; font-weight: 700; color: var(--liujin); letter-spacing: 4px; margin-bottom: 6px; }
+
+/* 业力秤 */
+.karma-scale {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(107, 75, 138, 0.07);
+  border: 1px solid rgba(107, 75, 138, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.ks-label {
+  writing-mode: vertical-rl;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #6b4b8a;
+  flex: 0 0 auto;
+}
+.ks-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #6b4b8a;
+  min-width: 34px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.ks-value.hot { color: var(--zhusha); text-shadow: 0 0 6px rgba(195, 39, 43, 0.4); }
+.ks-desc { color: var(--ink); }
+.ks-note { color: var(--dailan); font-style: normal; }
+
+.legacy-confirm { width: 100%; min-height: 46px; font-size: 16px; letter-spacing: 4px; }
+.legacy-confirm:disabled { letter-spacing: 4px; }
+
+.end-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
