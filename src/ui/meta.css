@@ -1,0 +1,238 @@
+/**
+ * 局外界面样式（v3 新增，Meta.tsx 专用）：
+ * 轮回殿（宿慧面板 / 业力珠 / 里程碑卷轴）、每日天机弹窗、丹方册、两段卡文本。
+ * 基础类（.home / .screen-page / .codex-* / .overlay / .panel 等）在 styles.css。
+ */
+
+/* ---------- 启程弹窗：宿慧提示 ---------- */
+
+.legacy-hint {
+  font-size: 12.5px;
+  color: var(--zhusha);
+  background: rgba(195, 39, 43, 0.07);
+  border: 1px dashed rgba(195, 39, 43, 0.45);
+  border-radius: 6px;
+  padding: 7px 10px;
+  line-height: 1.7;
+}
+
+/* ---------- 每日天机弹窗 ---------- */
+
+.daily-mut {
+  text-align: center;
+  font-size: 16px;
+  letter-spacing: 1px;
+  margin: 6px 0 10px;
+  color: var(--ink);
+}
+
+.daily-mut b {
+  color: var(--zhusha);
+  letter-spacing: 3px;
+  margin-right: 4px;
+}
+
+.daily-rules {
+  font-size: 13px;
+  color: var(--dailan);
+  line-height: 1.9;
+  text-align: center;
+  border-top: 1px dashed rgba(43, 43, 43, 0.25);
+  border-bottom: 1px dashed rgba(43, 43, 43, 0.25);
+  padding: 10px 4px;
+  margin-bottom: 14px;
+}
+
+/* ---------- 轮回殿：宿慧面板 ---------- */
+
+.legacy-panel {
+  width: 100%;
+  background: rgba(255, 252, 245, 0.85);
+  border: 1px solid rgba(43, 43, 43, 0.25);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.lp-title {
+  text-align: center;
+  letter-spacing: 6px;
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 15px;
+  border-bottom: 1px solid rgba(184, 134, 11, 0.4);
+  padding-bottom: 6px;
+}
+
+.lp-none {
+  color: var(--dailan);
+  font-size: 13px;
+  text-align: center;
+  padding: 4px 0;
+}
+
+.lp-item {
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.7;
+}
+
+.lp-text {
+  font-weight: 400;
+  color: var(--dailan);
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
+/* 业力珠：一珠一业，点亮为朱砂 */
+
+.karma-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.karma-row b {
+  color: var(--zhusha);
+}
+
+.karma-beads {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.karma-beads i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(43, 43, 43, 0.4);
+  background: transparent;
+}
+
+.karma-beads i.on {
+  background: var(--zhusha);
+  border-color: var(--zhusha);
+  box-shadow: 0 0 4px rgba(195, 39, 43, 0.55);
+}
+
+.karma-preview {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--dailan);
+  font-size: 12.5px;
+  line-height: 1.9;
+}
+
+.karma-preview .warn {
+  color: var(--zhusha);
+  font-weight: 700;
+}
+
+/* ---------- 轮回殿：里程碑卷轴（列表式，无购买） ---------- */
+
+.ms-scroll {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 252, 245, 0.7);
+  border: 1px solid rgba(43, 43, 43, 0.22);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.ms-item {
+  border-bottom: 1px dashed rgba(43, 43, 43, 0.18);
+  padding-bottom: 8px;
+  font-size: 14px;
+}
+
+.ms-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ms-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ms-head .ms-th {
+  color: var(--liujin);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.ms-head .ms-seal {
+  margin-left: auto;
+  color: var(--paper, #f4efe6);
+  background: var(--zhusha);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 1px 7px;
+  letter-spacing: 2px;
+  transform: rotate(-3deg);
+}
+
+.ms-item.reached b {
+  color: var(--liujin);
+}
+
+.ms-text {
+  color: var(--dailan);
+  font-size: 12.5px;
+  margin: 2px 0 4px;
+}
+
+.ms-bar {
+  height: 5px;
+  background: rgba(43, 43, 43, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ms-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(184, 134, 11, 0.55), var(--liujin));
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+/* ---------- 藏经阁：两段卡文本与丹方册 ---------- */
+
+.ci-sheng {
+  color: var(--liujin);
+  font-size: 12.5px;
+  border-left: 2px solid rgba(184, 134, 11, 0.55);
+  padding-left: 6px;
+  margin-top: 2px;
+}
+
+.recipe-note {
+  font-size: 12.5px;
+  color: var(--dailan);
+  text-align: center;
+  padding: 4px 0 8px;
+  letter-spacing: 1px;
+}
+
+.recipe-rare {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--zhusha);
+  border: 1px solid rgba(195, 39, 43, 0.55);
+  border-radius: 3px;
+  padding: 0 5px;
+  vertical-align: 1px;
+}
+
+.recipe-cost {
+  font-size: 12px;
+  color: var(--liujin);
+  margin-top: 2px;
+}

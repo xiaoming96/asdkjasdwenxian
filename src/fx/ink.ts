@@ -13,6 +13,8 @@ let blots: Blot[] = [];
 let flashAlpha = 0;
 let flashColor = '#fff';
 let raf = 0;
+// 滞气墨浊（四角向内漫墨，约 180ms 消散，非阻塞）
+let murkAlpha = 0;
 
 // 祥云粒子层（§14.1：程序化祥云，主界面/地图缓慢漂浮）
 interface Cloud { x: number; y: number; w: number; speed: number; alpha: number }
@@ -79,6 +81,22 @@ function loop() {
     b.alpha -= 0.035;
   }
   blots = blots.filter((b) => b.alpha > 0);
+  // 滞气墨浊：四个屏角的墨色晕染快速漫入又散去（§13.4 滞气 180ms）
+  if (murkAlpha > 0) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const rad = Math.max(w, h) * 0.42;
+    const corners: [number, number][] = [[0, 0], [w, 0], [0, h], [w, h]];
+    for (const [mx, my] of corners) {
+      const grad = cx.createRadialGradient(mx, my, 0, mx, my, rad);
+      grad.addColorStop(0, `rgba(30, 28, 26, ${murkAlpha})`);
+      grad.addColorStop(1, 'rgba(30, 28, 26, 0)');
+      cx.globalAlpha = 1;
+      cx.fillStyle = grad;
+      cx.fillRect(0, 0, w, h);
+    }
+    murkAlpha -= 0.034; // 0.38 起，60fps 下约 11 帧 ≈ 180ms
+  }
   // 全屏闪
   if (flashAlpha > 0) {
     cx.globalAlpha = flashAlpha;
@@ -123,4 +141,26 @@ export function thunderFlash() {
 export function goldRipple(x: number, y: number) {
   blots.push({ x, y, r: 8, vr: 2.2, alpha: 0.65, color: 'rgba(184,134,11,0.5)' });
   blots.push({ x, y, r: 4, vr: 1.6, alpha: 0.8, color: 'rgba(184,134,11,0.8)' });
+}
+
+/** 得气：鎏金点亮涟漪（v3 §4.4①，得气段点亮瞬间在出牌点绽开） */
+export function deqiFlash(x: number, y: number) {
+  blots.push({ x, y, r: 5, vr: 2.8, alpha: 0.9, color: 'rgba(255, 219, 112, 0.9)' });
+  blots.push({ x, y, r: 12, vr: 2.2, alpha: 0.6, color: 'rgba(216, 168, 32, 0.6)' });
+  blots.push({ x, y, r: 20, vr: 1.6, alpha: 0.35, color: 'rgba(184, 134, 11, 0.4)' });
+  // 四点金屑外溅
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + y * 0.01;
+    blots.push({
+      x: x + Math.cos(a) * 18,
+      y: y + Math.sin(a) * 18,
+      r: 2.5, vr: 0.9, alpha: 0.8,
+      color: 'rgba(229, 181, 68, 0.85)',
+    });
+  }
+}
+
+/** 滞气：全屏四角墨浊 180ms（v3 §4.4②，非阻塞演出） */
+export function zhiqiInk() {
+  murkAlpha = 0.38;
 }

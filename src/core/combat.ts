@@ -1,17 +1,26 @@
 /**
- * 战斗引擎（策划案 §4 详规）
- * 回合时序 §4.2、伤害结算顺序 §4.3、五行 §4.4、状态 §4.5、意图 §4.6。
+ * 战斗引擎 v3（策划案 §4 详规 + src/core/types.ts 契约注释）
+ * - 回合时序 §4.2：吐纳（炼气不储存 / 筑基气海储存）→ 袖藏牌入手 → 抽牌 → 出牌 → 袖藏 → 敌方回合。
+ * - 伤害结算 §4.3：无全局乘区；攻方气滞 ×0.7、守方破绽 ×1.4，每步向下取整。
+ * - 五行 §4.4：行位/得气/滞气/周天/天人合一 + 克伐五动词（KEFA_VERB）+ 护体属性双向生克。
+ * - 状态 §4.5 v3 表；心魔投影 §4.8；敌方 special/ai 约定见 types.ts EnemyMove 注释。
  * 实现方式：reduce 入口深拷贝后在草稿上变更，对调用方保持"纯函数 + 不可变"。
  */
 import type {
-  BattleState, CardEffects, CardInstance, EnemyMove, EnemyState,
+  BattleState, CardEffects, CardInstance, EnemyDef, EnemyMove, EnemyState,
   RunState, StatusId,
 } from './types';
 import { getCard } from '../data/cards';
 import { getEnemy, JIUCHONG_WAVES, ACT_BOSS, normalPool, elitePool } from '../data/enemies';
-import type { EnemyDef } from './types';
-import { generates, overcomes, KE_EFFECT, type Element, type CardElement, SHENG } from './wuxing';
+import { getRecipe } from '../data/alchemy';
+import {
+  ELEMENTS, ELEMENT_NAME, SHENG, KEFA_VERB, KEFA_NAME, generates, overcomes,
+  blockRatio, absorbWithBlock, type CardElement, type Element,
+} from './wuxing';
 import { rngInt, rngPick, rngShuffle } from './rng';
+
+/** 手牌上限（§4.1） */
+const HAND_CAP = 8;
 
 // ---------- 工具 ----------
 
@@ -24,13 +33,17 @@ export function makeCard(run: RunState, cardId: string, upgraded = false): CardI
   return { uid: newUid(run), cardId, upgraded };
 }
 
-export function effectsOf(inst: CardInstance): CardEffects {
+/** 两段效果（按 upgraded 取 upBase/upSheng；双行牌以 a 为基础段、b 为得气补段的展示口径） */
+export function effectsOf(inst: CardInstance): { base: CardEffects; sheng?: CardEffects } {
   const def = getCard(inst.cardId);
-  return inst.upgraded ? def.up : def.base;
-}
-
-export function elementOf(inst: CardInstance): CardElement {
-  return getCard(inst.cardId).element;
+  if (def.dual) {
+    return inst.upgraded
+      ? { base: def.dual.aUp, sheng: def.dual.bUp }
+      : { base: def.dual.a, sheng: def.dual.b };
+  }
+  return inst.upgraded
+    ? { base: def.upBase, sheng: def.upSheng ?? def.sheng }
+    : { base: def.base, sheng: def.sheng };
 }
 
 function log(b: BattleState, msg: string) {
@@ -38,221 +51,60 @@ function log(b: BattleState, msg: string) {
   if (b.log.length > 200) b.log.splice(0, b.log.length - 100);
 }
 
-function hasPower(b: BattleState, cardId: string) {
+function hasRelic(run: RunState, id: string): boolean {
+  return run.relics.includes(id);
+}
+
+function hasFruit(run: RunState, id: string): boolean {
+  return run.fruits.includes(id);
+}
+
+function findPower(b: BattleState, cardId: string) {
   return b.powers.find((p) => p.cardId === cardId);
 }
 
+/** 心法数值（按参悟态取 upBase.n / base.n） */
 function powerN(b: BattleState, cardId: string): number {
-  const p = hasPower(b, cardId);
+  const p = findPower(b, cardId);
   if (!p) return 0;
   const def = getCard(cardId);
-  return (p.upgraded ? def.up.n : def.base.n) ?? 0;
-}
-
-function hasRelic(run: RunState, id: string) {
-  return run.relics.includes(id);
+  return (p.upgraded ? def.upBase : def.base).n ?? 0;
 }
 
 function curseInHand(b: BattleState, cardId: string): boolean {
   return b.hand.some((c) => c.cardId === cardId);
 }
 
-/** 灵气返还上限（基础 2 + 道法自然；罚雷场效果 −1） */
-function refundCap(run: RunState, b: BattleState): number {
-  let cap = run.liushuiRefundCap + powerN(b, 'daofaziran');
-  if (b.waveIndex >= 0 && aliveEnemies(b).some((e) => e.enemyId === 'falei')) cap -= 1;
-  return Math.max(0, cap);
-}
-
 export function aliveEnemies(b: BattleState): EnemyState[] {
   return b.enemies.filter((e) => e.hp > 0);
 }
 
-// ---------- 战斗构建 ----------
-
-function makeEnemy(run: RunState, def: EnemyDef, hpOverride?: number): EnemyState {
-  let hp = hpOverride ?? def.hp;
-  // 难度：一重天敌人气血 +10%，九重天再 +10%（§11.2）
-  if (run.ascension >= 1) hp = Math.floor(hp * 1.1);
-  if (run.ascension >= 9) hp = Math.floor(hp * 1.1);
-  return {
-    uid: newUid(run), enemyId: def.id, name: def.name, element: def.element,
-    hp, maxHp: hp, block: 0, statuses: {}, moveIndex: 0, intent: null, zhiseCd: 0, flags: {},
-  };
+function heal(run: RunState, n: number) {
+  if (n > 0) run.hp = Math.min(run.maxHp, run.hp + n);
 }
 
-function enemyGroup(run: RunState, tier: 'normal' | 'elite'): EnemyDef[] {
-  const pool = tier === 'normal' ? normalPool(run.act) : elitePool(run.act);
-  const r = rngPick(run.rng, 'enemyAI', pool);
-  run.rng = r.state;
-  const def = r.value;
-  if (def.id === 'heiwuchang') {
-    return [getEnemy('heiwuchang'), getEnemy('baiwuchang')];
-  }
-  const out: EnemyDef[] = [];
-  for (let i = 0; i < (def.count ?? 1); i++) out.push(def);
-  return out;
+/** 吐纳/灵气获取：炼气期不设上限（回合开始重置）；筑基起受气海上限 run.poolCap 约束 */
+function gainEnergy(run: RunState, b: BattleState, n: number) {
+  if (n <= 0) return;
+  if (run.realm === 'lianqi') b.player.energy += n;
+  else b.player.energy = Math.max(b.player.energy, Math.min(run.poolCap, b.player.energy + n));
 }
 
-/** 开始一场战斗；enemyIds 提供时为定制战（事件战/Boss） */
-export function startBattle(
-  run: RunState,
-  battleType: 'normal' | 'elite' | 'boss',
-  enemyIds?: string[],
-): void {
-  let defs: EnemyDef[];
-  if (enemyIds) {
-    defs = enemyIds.map((id) => getEnemy(id));
-  } else if (battleType === 'boss') {
-    defs = [getEnemy(ACT_BOSS[run.act])];
-  } else {
-    defs = enemyGroup(run, battleType);
-  }
-
-  const isJiuchong = defs[0]?.id === 'jiuchongtianjie';
-  const b: BattleState = {
-    battleType, outcome: 'ongoing',
-    enemies: [], hand: [], drawPile: [], discardPile: [], exhaustPile: [],
-    player: { block: 0, energy: 0, statuses: {}, attackBuffs: [] },
-    turn: 0, xingwei: null, liushuiRefunded: 0, liushuiCount: 0,
-    chainLinks: 0, zhoutianTriggered: false, zhoutianTotal: 0,
-    cardsPlayed: 0, attacksPlayed: 0, playedByElement: {},
-    powers: [], huichunshuUses: 0, freeNextCard: false, pendingChoice: null,
-    wuxingDanNext: false, longhuBonus: 0, tianjiActive: false,
-    waveIndex: isJiuchong ? 0 : -1, turnsTotal: 0, log: [],
-  };
-
-  if (isJiuchong) {
-    b.enemies = [spawnWave(run, 0)];
-  } else {
-    b.enemies = defs.map((d) => makeEnemy(run, d));
-    if (defs[0]?.id === 'xinmo' && run.ascension < 3) {
-      // 三重天以下不额外强化（占位：三重天 Boss 强化 = 额外 +10% 血）
-    }
-  }
-  // 三重天：Boss 强化模式=额外行为（§11.2），在各 Boss 行为处生效
-  run.flags['burnThisBattle'] = 0; // 五雷轰顶成就计数
-
-  // 洗入牌库
-  const shuffled = rngShuffle(run.rng, 'shuffle', run.deck.map((c) => ({ ...c })));
-  run.rng = shuffled.state;
-  b.drawPile = shuffled.value;
-
-  run.battle = b;
-
-  // 战斗开始：法宝效果（§4.2）
-  if (hasRelic(run, 'xuanguijia')) gainBlock(run, b, 8, true);
-  if (run.battleStartBlock > 0) gainBlock(run, b, run.battleStartBlock, true);
-  if (run.flags['xianghuo'] && battleType === 'boss') {
-    gainBlock(run, b, run.flags['xianghuo'], true);
-    delete run.flags['xianghuo'];
-  }
-  if (hasRelic(run, 'tianleicuiti')) {
-    for (const e of aliveEnemies(b)) enemyLoseHp(run, b, e, 4);
-  }
-  if (hasRelic(run, 'xinmozhong')) {
-    run.hp = Math.max(1, run.hp - 4);
-  }
-  if (run.flags['zhangqi']) {
-    // 药园遗址：瘴气入体 → 以灼烧形式带入（对玩家的持续伤害规则一致）
-    addPlayerStatus(b, 'zhuoshao', run.flags['zhangqi']);
-    delete run.flags['zhangqi'];
-  }
-
-  // 妖怪图鉴收录（§11.4：局结算时并入 profile.seenEnemies）
-  for (const e of b.enemies) run.flags[`seen_${e.enemyId}`] = 1;
-  if (isJiuchong) run.flags['seen_jiuchongtianjie'] = 1;
-
-  // 敌人亮出首回合意图
-  for (const e of aliveEnemies(b)) setIntent(run, b, e);
-
-  startPlayerTurn(run, b);
-}
-
-// ---------- 九重天劫波次 ----------
-
-function spawnWave(run: RunState, index: number): EnemyState {
-  const w = JIUCHONG_WAVES[index];
-  let hp = w.hp;
-  if (run.ascension >= 1) hp = Math.floor(hp * 1.1);
-  if (run.ascension >= 9) hp = Math.floor(hp * 1.1);
-  if (w.id === 'daolei' && run.flags['jujuexinmo']) hp = Math.max(1, hp - run.flags['jujuexinmo']);
-  if (w.id === 'daolei' && run.ascension >= 9) hp += 80;
-  // 三重天强化：每道雷灵携 1 层罡气登场
-  const statuses: EnemyState['statuses'] = run.ascension >= 3 ? { gangqi: 1 } : {};
-  return {
-    uid: newUid(run), enemyId: w.id, name: `第${'一二三四五六七八九'[index]}道·${w.name}`,
-    element: w.element, hp, maxHp: hp, block: 0, statuses, moveIndex: 0,
-    intent: null, zhiseCd: 0, flags: { wave: index },
-  };
-}
-
-function waveMove(run: RunState, index: number): EnemyMove {
-  const w = JIUCHONG_WAVES[index];
-  let dmg = w.baseDamage;
-  if (w.id === 'daolei' && run.ascension >= 9) dmg += 4;
-  return { id: 'leiji', name: '雷击', kind: 'attack', damage: dmg, times: w.times };
-}
-
-// ---------- 意图 ----------
-
-function setIntent(run: RunState, b: BattleState, e: EnemyState) {
-  // 九重天劫：波次驱动
-  if (b.waveIndex >= 0 && e.flags['wave'] !== undefined) {
-    const w = JIUCHONG_WAVES[e.flags['wave']];
-    // 灭雷：每第 2 回合天罚 20；道雷：每第 3 回合问道
-    if (w.special === 'tianfa' && e.flags['turns'] > 0 && e.flags['turns'] % 2 === 0) {
-      e.intent = { id: 'tianfa', name: '天罚', kind: 'attack', damage: 20, special: 'tianfa' };
-      return;
-    }
-    if (w.special === 'wendao' && e.flags['turns'] > 0 && e.flags['turns'] % 3 === 0) {
-      e.intent = { id: 'wendao', name: '问道', kind: 'unknown', special: 'wendao' };
-      return;
-    }
-    e.intent = waveMove(run, e.flags['wave']);
-    return;
-  }
-
-  const ai = getEnemy(e.enemyId);
-
-  // 雷灵傀儡：第 4/8/12 回合劫雷（提前 1 回合明示 → 意图即为下回合行动）
-  if (e.enemyId === 'leiling_kuilei') {
-    const nextTurn = b.turn + 1;
-    if (nextTurn === 4 || nextTurn === 8 || nextTurn === 12) {
-      const dmg = nextTurn === 4 ? 18 : nextTurn === 8 ? 24 : 30;
-      e.intent = { id: 'jielei', name: `第${nextTurn === 4 ? '一' : nextTurn === 8 ? '二' : '三'}道劫雷`, kind: 'attack', damage: dmg, special: 'jielei' };
-      return;
-    }
-    if (b.turn >= 12) e.flags['rage'] = 1;
-  }
-
-  // 心魔：行为池轮转（相变阶段蓄力）
-  if (e.enemyId === 'xinmo') {
-    if (e.flags['charging'] === 2) { e.intent = { id: 'xinmojielei_charge', name: '蓄力·心魔劫雷', kind: 'charge' }; return; }
-    if (e.flags['charging'] === 1) {
-      const minions = aliveEnemies(b).filter((x) => x.enemyId === 'zhinian').length;
-      e.intent = { id: 'xinmojielei', name: '心魔劫雷', kind: 'attack', damage: 24 + 6 * minions, special: 'xinmojielei' };
-      return;
-    }
-  }
-
-  const moves = ai.moves;
-  e.intent = moves[e.moveIndex % moves.length];
-  // 山魈：第二轮起石斧递增
-  if (e.enemyId === 'shanxiao' && e.intent.id === 'shifu2') {
-    const loop = Math.floor(e.moveIndex / moves.length);
-    e.intent = { ...e.intent, damage: 10 + loop * 2 };
+/** 燃寿（枯荣轮转 / 大还丹）：寿元归零即坐化 */
+function burnLife(run: RunState, b: BattleState, years: number) {
+  if (years <= 0) return;
+  run.lifespan -= years;
+  run.stats.lifespanBurned += years;
+  if (run.lifespan <= 0) {
+    run.lifespan = 0;
+    b.outcome = 'defeat';
+    log(b, '寿元燃尽，坐化道途');
   }
 }
 
-/** 意图显示数值（含罡气/虚弱修正，§4.6） */
-export function intentDamage(_b: BattleState, e: EnemyState): number | null {
-  if (!e.intent || e.intent.kind !== 'attack' || e.intent.damage === undefined) return null;
-  let dmg = e.intent.damage + (e.statuses.gangqi ?? 0);
-  const chanfu = e.statuses.chanfu ?? 0;
-  for (let i = 0; i < chanfu; i++) dmg = Math.floor(dmg * 0.6);
-  if ((e.statuses.xuruo ?? 0) > 0) dmg = Math.floor(dmg * 0.75);
-  return dmg;
+/** 罚雷场效果：每回合第 3 次起的得气不触发得气段（§8.10） */
+function deqiCapActive(b: BattleState): boolean {
+  return b.waveIndex >= 0 && aliveEnemies(b).some((e) => e.enemyId === 'falei');
 }
 
 // ---------- 状态施加 ----------
@@ -264,120 +116,173 @@ function addPlayerStatus(b: BattleState, id: StatusId, n: number) {
 }
 
 function addEnemyStatus(run: RunState, b: BattleState, e: EnemyState, id: StatusId, n: number) {
-  if (id === 'zhuoshao') {
-    n += powerN(b, 'lihuoxinjing'); // 离火心经：施加灼烧 +N
-    if (n > 0) run.flags['burnThisBattle'] = (run.flags['burnThisBattle'] ?? 0) + n; // 五雷轰顶
-    if ((run.flags['burnThisBattle'] ?? 0) >= 25) run.flags['ach_wulei'] = 1;
+  if (n === 0) return;
+  if (id === 'zhuoshao' && n > 0) {
+    n += powerN(b, 'lihuoxinjing'); // 离火心经：你施加的灼烧 +N
+    run.flags['burnThisBattle'] = (run.flags['burnThisBattle'] ?? 0) + n;
+    if ((run.flags['burnThisBattle'] ?? 0) >= 25) run.flags['ach_wulei'] = 1; // 成就"五雷轰顶"
   }
-  if (id === 'chanfu') {
-    const cur = e.statuses.chanfu ?? 0;
-    e.statuses.chanfu = Math.min(3, cur + n); // 最多 3 层
-    return;
-  }
-  if (id === 'pojia') {
-    e.statuses.pojia = 1; // 不叠加，可刷新
+  if (id === 'ruanhua') {
+    e.statuses.ruanhua = 1; // 不叠加，可刷新（§4.5）
     return;
   }
   e.statuses[id] = (e.statuses[id] ?? 0) + n;
   if (e.statuses[id]! <= 0) delete e.statuses[id];
 }
 
-/** 滞涩：意图延迟 1 回合（同目标 2 回合内限 1 次） */
+/** 滞涩：意图延迟 1 回合（同一敌人每 2 回合限 1 次） */
 function applyZhise(b: BattleState, e: EnemyState) {
   if (e.zhiseCd > 0) return;
   e.flags['zhise'] = 1;
   e.zhiseCd = 2;
-  log(b, `${e.name} 意图凝滞`);
+  log(b, `${e.name} 气机凝滞，意图延迟`);
 }
 
-/** 熄灭：移除 1 层增益（罡气/固本优先） */
-function applyXimie(e: EnemyState) {
-  if ((e.statuses.gangqi ?? 0) > 0) { e.statuses.gangqi! -= 1; if (!e.statuses.gangqi) delete e.statuses.gangqi; return; }
-  if ((e.statuses.guben ?? 0) > 0) { e.statuses.guben! -= 1; if (!e.statuses.guben) delete e.statuses.guben; return; }
+/** 移除敌方至多 max 层增益（罡气优先，其次固本），返回移除层数 */
+function removeEnemyBuffs(e: EnemyState, max: number): number {
+  let removed = 0;
+  const order: StatusId[] = ['gangqi', 'guben'];
+  for (const id of order) {
+    while (removed < max && (e.statuses[id] ?? 0) > 0) {
+      e.statuses[id]! -= 1;
+      if (e.statuses[id]! <= 0) delete e.statuses[id];
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+/** 移除玩家 1 层增益（玄雷：罡气 → 固本 → 回春） */
+function removePlayerBuff(b: BattleState) {
+  const order: StatusId[] = ['gangqi', 'guben', 'huichun'];
+  for (const id of order) {
+    if ((b.player.statuses[id] ?? 0) > 0) {
+      addPlayerStatus(b, id, -1);
+      return;
+    }
+  }
 }
 
 // ---------- 护体 ----------
 
-function gainBlock(_run: RunState, b: BattleState, amount: number, raw = false) {
+/** 玩家获得护体：带来源属性（§4.4 ⑤），属性取最后一次来源 */
+function gainPlayerBlock(_run: RunState, b: BattleState, amount: number, element: CardElement) {
   let n = amount;
-  if (!raw) {
-    const budong = powerN(b, 'budongrushan');
-    if (budong) n = Math.floor(n * (1 + budong / 100));
-    if ((b.player.statuses.blockHalf ?? 0) > 0) n = Math.floor(n * 0.5); // 剑域
-  }
+  if (n <= 0) return;
+  if ((b.player.statuses.blockHalf ?? 0) > 0) n = Math.floor(n * 0.5); // 剑域
+  const budong = powerN(b, 'budongrushan');
+  if (budong > 0) n = Math.floor(n * (1 + budong / 100));
+  if (n <= 0) return;
   b.player.block += n;
+  b.player.blockElement = element;
 }
 
+/** 敌人获得护体：软化减半；破土后本回合无法获得 */
 function enemyGainBlock(e: EnemyState, amount: number) {
-  if ((e.statuses.pojia ?? 0) > 0) return; // 破甲：护体获取无效
-  e.block += amount;
+  let n = amount;
+  if (n <= 0) return;
+  if (e.flags['noBlock']) return; // 破土
+  if ((e.statuses.ruanhua ?? 0) > 0) n = Math.floor(n / 2); // 软化
+  e.block += n;
 }
 
 // ---------- 玩家受伤 ----------
 
-/** 玩家受到攻击/伤害。isAttack 时走护体与反制钩子。返回实际掉血。 */
-export function playerDamage(
-  run: RunState, b: BattleState, amount: number,
-  opts: { isAttack?: boolean; source?: EnemyState; pierce?: boolean } = {},
-): number {
-  let dmg = amount;
-  if (opts.isAttack) {
-    if ((b.player.statuses.yishang ?? 0) > 0) dmg = Math.floor(dmg * 1.5);
-    if ((b.player.statuses.guishaDan ?? 0) > 0) dmg = Math.floor(dmg * 0.5);
-    if (hasRelic(run, 'baguajing') && !b.player.statuses['_baguaUsed']) {
-      dmg = Math.floor(dmg / 2);
-      b.player.statuses['_baguaUsed' as StatusId] = 1;
+/** 直接失血（无视护体） */
+function playerLoseHp(run: RunState, b: BattleState, n: number) {
+  if (n <= 0) return;
+  run.hp -= n;
+  run.stats.damageTaken += n;
+  checkPlayerDeath(run, b);
+}
+
+/** 卡牌自伤（走护体，1:1，不吃属性生克） */
+function playerSelfDamage(run: RunState, b: BattleState, n: number) {
+  if (n <= 0) return;
+  const blocked = Math.min(b.player.block, n);
+  b.player.block -= blocked;
+  playerLoseHp(run, b, n - blocked);
+}
+
+/**
+ * 敌人对玩家的一段攻击（§4.3 + §4.4 ⑤）：
+ * dmg = (基础 + 罡气) → 六重天 ×1.15 → 攻方气滞 ×0.7 → 守方破绽 ×1.4 → 龟息丹减半
+ * → 藤偶承伤 → 按护体属性效率结算（八卦镜每场第一次"被克"改判 1:1）→ 溢出扣血。
+ */
+function playerTakeAttack(run: RunState, b: BattleState, e: EnemyState, base: number): number {
+  let dmg = base + (e.statuses.gangqi ?? 0);
+  if (run.ascension >= 6) dmg = Math.floor(dmg * 1.15); // 六重天：妖力滔天
+  if ((e.statuses.qizhi ?? 0) > 0) dmg = Math.floor(dmg * 0.7);
+  if ((b.player.statuses.pozhan ?? 0) > 0) dmg = Math.floor(dmg * 1.4);
+  if ((b.player.statuses.guixiDan ?? 0) > 0) dmg = Math.floor(dmg * 0.5); // 龟息丹
+
+  // 青藤傀儡：藤偶承伤（上限 _tengouCap/回合）
+  if ((b.player.statuses.tengou ?? 0) > 0 && dmg > 0) {
+    const cap = b.player.statuses['_tengouCap'] ?? 7;
+    const used = b.playedByElement['_tengouUsed'] ?? 0;
+    const absorb = Math.min(dmg, Math.max(0, cap - used));
+    if (absorb > 0) {
+      dmg -= absorb;
+      b.playedByElement['_tengouUsed'] = used + absorb;
+      if ((b.player.statuses['_tengouThorn'] ?? 0) > 0) addEnemyStatus(run, b, e, 'zhangdu', 1);
+      log(b, `藤偶承受 ${absorb} 伤`);
     }
   }
-  // 青藤傀儡吸收
-  const tengou = b.player.statuses.tengou ?? 0;
-  if (tengou > 0 && opts.isAttack) {
-    const cap = b.player.statuses['_tengouCap' as StatusId] ?? 6;
-    const absorbed = Math.min(dmg, cap);
-    dmg -= absorbed;
-    if (absorbed > 0) log(b, `藤偶承受 ${absorbed} 伤`);
+
+  // 护体属性效率
+  let ratio = blockRatio(e.element, b.player.block > 0 ? b.player.blockElement : 'none');
+  if (ratio === 2 && hasRelic(run, 'baguajing') && !b.playedByElement['_baguaUsed']) {
+    ratio = 1;
+    b.playedByElement['_baguaUsed'] = 1;
+    log(b, '八卦镜微光一闪，克制之势被折返为平');
   }
-  let hpLoss = dmg;
-  if (!opts.pierce) {
-    const blocked = Math.min(b.player.block, dmg);
-    b.player.block -= blocked;
-    hpLoss = dmg - blocked;
-  }
+  const { hpLoss, blockLoss } = absorbWithBlock(dmg, b.player.block, ratio);
+  b.player.block -= blockLoss;
   if (hpLoss > 0) {
     run.hp -= hpLoss;
     run.stats.damageTaken += hpLoss;
   }
-  // 反制钩子（每次被攻击）
-  if (opts.isAttack && opts.source) {
-    const fanci = b.player.statuses.fanci ?? 0;
-    if (fanci > 0) enemyLoseHp(run, b, opts.source, fanci);
-    const fanshao = b.player.statuses.fanshao ?? 0;
-    if (fanshao > 0) addEnemyStatus(run, b, opts.source, 'zhuoshao', fanshao);
-    const yinguo = b.player.statuses.yinguo ?? 0;
-    if (yinguo > 0) {
-      enemyLoseHp(run, b, opts.source, Math.floor((amount * yinguo) / 100));
-      delete b.player.statuses.yinguo;
-    }
+
+  // 反制钩子
+  const fanci = b.player.statuses.fanci ?? 0;
+  if (fanci > 0 && e.hp > 0) enemyLoseHp(run, b, e, fanci);
+  const fanshao = b.player.statuses.fanshao ?? 0;
+  if (fanshao > 0 && e.hp > 0) addEnemyStatus(run, b, e, 'zhuoshao', fanshao);
+  const yinguo = b.player.statuses.yinguo ?? 0;
+  if (yinguo > 0 && e.hp > 0) {
+    enemyLoseHp(run, b, e, Math.floor((base * yinguo) / 100));
+    delete b.player.statuses.yinguo;
   }
   checkPlayerDeath(run, b);
   return hpLoss;
 }
 
 function checkPlayerDeath(run: RunState, b: BattleState) {
-  if (run.hp > 0) return;
+  if (run.hp > 0 || b.outcome !== 'ongoing') return;
   // 浴火涅槃
   const niepan = b.player.statuses.niepan ?? 0;
   if (niepan > 0) {
     run.hp = Math.max(1, Math.floor((run.maxHp * niepan) / 100));
     delete b.player.statuses.niepan;
-    log(b, `浴火涅槃！以 ${run.hp} 气血复活`);
+    log(b, `浴火涅槃！以 ${run.hp} 气血重生`);
     return;
   }
-  // 不灭灯（每局一次）
-  if (hasRelic(run, 'bumiedeng') && !run.flags['bumiedengUsed']) {
-    run.hp = 1;
+  // 不灭灯（每局一次；寿元 <10 无效）
+  if (hasRelic(run, 'bumiedeng') && !run.flags['bumiedengUsed'] && run.lifespan >= 10) {
+    run.lifespan -= 10;
+    run.stats.lifespanBurned += 10;
     run.flags['bumiedengUsed'] = 1;
-    log(b, '不灭灯亮起，你保住一口气！');
+    run.hp = 1;
+    log(b, '不灭灯燃去十年寿数，为你保住一口气');
+    return;
+  }
+  // 婴变胎光（每局一次；寿元 ≥20：燃至 10 年复活 30% 上限）
+  if (hasRelic(run, 'yingbiantaiguang') && !run.flags['yingbianUsed'] && run.lifespan >= 20) {
+    run.stats.lifespanBurned += run.lifespan - 10;
+    run.lifespan = 10;
+    run.flags['yingbianUsed'] = 1;
+    run.hp = Math.max(1, Math.floor(run.maxHp * 0.3));
+    log(b, '婴变胎光！燃尽寿数，原地重修');
     return;
   }
   run.hp = 0;
@@ -388,43 +293,57 @@ function checkPlayerDeath(run: RunState, b: BattleState) {
 
 /** 直接掉血（无视护体、不触发攻击钩子） */
 function enemyLoseHp(run: RunState, b: BattleState, e: EnemyState, n: number) {
-  if (e.hp <= 0) return;
+  if (e.hp <= 0 || n <= 0) return;
   e.hp -= n;
+  xinmoCheckPhase(run, b, e);
   if (e.hp <= 0) onEnemyDeath(run, b, e);
 }
 
-/** 敌人受到攻击伤害（走护体） */
+/**
+ * 敌人受到玩家攻击（玩家攻击 vs 敌护体恒为 1:1，§4.3）。
+ * pierceHalf = 熔锻：此击 50% 伤害无视护体（向下取整部分直击气血）。
+ */
 function enemyTakeAttack(
   run: RunState, b: BattleState, e: EnemyState, dmg: number,
-  opts: { ignoreBlock?: boolean } = {},
+  opts: { ignoreBlock?: boolean; pierceHalf?: boolean } = {},
 ): number {
-  if (e.hp <= 0) return 0;
+  if (e.hp <= 0 || b.outcome !== 'ongoing') return 0;
   e.flags['hitThisTurn'] = (e.flags['hitThisTurn'] ?? 0) + 1;
   // 蛟：单回合被攻击 ≥3 次 → 逆鳞
   if (e.enemyId === 'jiao' && e.flags['hitThisTurn'] === 3) {
     e.statuses.gangqi = (e.statuses.gangqi ?? 0) + 3;
     log(b, '蛟逆鳞怒张，罡气 +3！');
   }
-  // 千年藤妖荆棘姿态：攻击它受 4 伤
+  // 荆棘姿态：攻击它受刺
   if ((e.flags['jingji'] ?? 0) > 0) {
-    playerDamage(run, b, e.flags['jingjiN'] ?? 4, { pierce: true });
+    playerLoseHp(run, b, e.flags['jingjiN'] ?? 5);
+    if (b.outcome !== 'ongoing') return 0;
   }
-  let hpLoss = dmg;
-  if (!opts.ignoreBlock) {
+  let hpLoss: number;
+  if (opts.ignoreBlock) {
+    hpLoss = dmg;
+  } else if (opts.pierceHalf) {
+    const direct = Math.floor(dmg / 2);
+    const rest = dmg - direct;
+    const blocked = Math.min(e.block, rest);
+    e.block -= blocked;
+    hpLoss = direct + rest - blocked;
+  } else {
     const blocked = Math.min(e.block, dmg);
     e.block -= blocked;
     hpLoss = dmg - blocked;
   }
   e.hp -= hpLoss;
+  xinmoCheckPhase(run, b, e);
   if (e.hp <= 0) onEnemyDeath(run, b, e);
   return hpLoss;
 }
 
 function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
   e.hp = 0;
-  run.flags['kills'] = (run.flags['kills'] ?? 0) + 1; // 击杀计数（心魔对白/统计用）
+  run.flags['kills'] = (run.flags['kills'] ?? 0) + 1;
   log(b, `${e.name} 化墨消散`);
-  // 火鸦/尸群：同伴死亡强化
+  // 同伴死亡强化
   if (e.enemyId === 'huoya') {
     for (const o of aliveEnemies(b)) if (o.enemyId === 'huoya') o.statuses.gangqi = (o.statuses.gangqi ?? 0) + 2;
   }
@@ -433,13 +352,19 @@ function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
   }
   // 黑白无常：任一死亡另一狂暴
   if (e.enemyId === 'heiwuchang' || e.enemyId === 'baiwuchang') {
-    for (const o of aliveEnemies(b)) if (o.enemyId === 'heiwuchang' || o.enemyId === 'baiwuchang') o.flags['rage'] = 1;
+    for (const o of aliveEnemies(b)) {
+      if (o.enemyId === 'heiwuchang' || o.enemyId === 'baiwuchang') o.flags['rage'] = 1;
+    }
   }
-  // 阴煞雷：死亡时施你 1 层虚弱
-  if (e.enemyId === 'yinshalei') addPlayerStatus(b, 'xuruo', 1);
-  // 成就"身外化身"：相变后未掉血击杀心魔
-  if (e.enemyId === 'xinmo' && run.flags['xinmoPhaseHp'] !== undefined && run.hp >= run.flags['xinmoPhaseHp']) {
-    run.flags['ach_shenwai'] = 1;
+  // 阴煞雷：死亡时施你气滞 1
+  if (e.enemyId === 'yinshalei') addPlayerStatus(b, 'qizhi', 1);
+  // 心魔：道心通明（心魔 0 进场取胜）→ 明镜止水
+  if (e.enemyId === 'xinmo') {
+    if ((e.flags['demon'] ?? 0) === 0) run.flags['daoxin'] = 1;
+    // 成就"身外化身"：相变后未掉血击杀
+    if (run.flags['xinmoPhaseHp'] !== undefined && run.hp >= run.flags['xinmoPhaseHp']) {
+      run.flags['ach_shenwai'] = 1;
+    }
   }
 
   // 九重天劫：击杀当前雷灵立即进入下一道
@@ -447,15 +372,14 @@ function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
     const wave = e.flags['wave'];
     const w = JIUCHONG_WAVES[wave];
     if (w.breatherAfter && run.ascension < 8) {
-      // 喘息：回 8 血、抽 2、+1 灵气（§8.10）
-      run.hp = Math.min(run.maxHp, run.hp + 8);
+      heal(run, 10);
       drawCards(run, b, 2);
-      b.player.energy += 1;
-      log(b, '【喘息】雷云暂歇：回 8 血、抽 2、+1 灵气');
+      gainEnergy(run, b, 1);
+      log(b, '【喘息】雷云暂歇：回 10 血、抽 2、吐纳 +1');
     }
     if (wave + 1 < JIUCHONG_WAVES.length) {
       b.waveIndex = wave + 1;
-      const next = spawnWave(run, b.waveIndex);
+      const next = spawnWave(run, b, b.waveIndex);
       b.enemies.push(next);
       run.flags[`seen_${next.enemyId}`] = 1;
       setIntent(run, b, next);
@@ -469,9 +393,6 @@ function onEnemyDeath(run: RunState, b: BattleState, e: EnemyState) {
 // ---------- 抽牌 ----------
 
 export function drawCards(run: RunState, b: BattleState, n: number) {
-  let handCap = 10;
-  if ((b.player.statuses.handCapDown ?? 0) > 0) handCap -= 1; // 忘川渡鬼摆渡
-  if (run.flags['dailyQingshen']) handCap = Math.min(handCap, 6); // 每日天机·轻身如燕
   for (let i = 0; i < n; i++) {
     if (b.drawPile.length === 0) {
       if (b.discardPile.length === 0) return;
@@ -481,135 +402,494 @@ export function drawCards(run: RunState, b: BattleState, n: number) {
       b.discardPile = [];
     }
     const card = b.drawPile.shift()!;
-    if (b.hand.length >= handCap) {
-      b.discardPile.push(card); // 超出手牌上限直接进弃牌堆（§4.1）
-    } else {
-      b.hand.push(card);
+    if (b.hand.length >= HAND_CAP) b.discardPile.push(card); // 溢出进弃牌堆（§4.1）
+    else b.hand.push(card);
+  }
+}
+
+/** 确保牌库顶可见 n 张（不足时洗入弃牌堆），返回顶部切片 */
+function revealTop(run: RunState, b: BattleState, n: number): CardInstance[] {
+  if (b.drawPile.length < n && b.discardPile.length > 0) {
+    const r = rngShuffle(run.rng, 'shuffle', b.discardPile);
+    run.rng = r.state;
+    b.drawPile = [...b.drawPile, ...r.value];
+    b.discardPile = [];
+  }
+  return b.drawPile.slice(0, n);
+}
+
+// ---------- 战斗构建 ----------
+
+function makeEnemy(run: RunState, def: EnemyDef, hpOverride?: number): EnemyState {
+  let hp = hpOverride ?? def.hp;
+  if (run.ascension >= 1) hp = Math.floor(hp * 1.1); // 一重天：妖氛渐浓
+  if (run.ascension >= 9) hp = Math.floor(hp * 1.1); // 九重天：天道无情
+  return {
+    uid: newUid(run), enemyId: def.id, name: def.name, element: def.element,
+    hp, maxHp: hp, block: 0, statuses: {}, moveIndex: 0, intent: null, zhiseCd: 0, flags: {},
+  };
+}
+
+function enemyGroup(run: RunState, tier: 'normal' | 'elite'): EnemyDef[] {
+  const pool = tier === 'normal' ? normalPool(run.act) : elitePool(run.act);
+  const r = rngPick(run.rng, 'enemyAI', pool);
+  run.rng = r.state;
+  const def = r.value;
+  if (def.id === 'heiwuchang') return [getEnemy('heiwuchang'), getEnemy('baiwuchang')];
+  const out: EnemyDef[] = [];
+  for (let i = 0; i < (def.count ?? 1); i++) out.push(def);
+  return out;
+}
+
+/** 开始一场战斗；enemyIds 提供时为定制战（事件战/Boss） */
+export function startBattle(
+  run: RunState,
+  battleType: 'normal' | 'elite' | 'boss',
+  enemyIds?: string[],
+): void {
+  let defs: EnemyDef[];
+  if (enemyIds) defs = enemyIds.map((id) => getEnemy(id));
+  else if (battleType === 'boss') defs = [getEnemy(ACT_BOSS[run.act])];
+  else defs = enemyGroup(run, battleType);
+
+  const isJiuchong = defs[0]?.id === 'jiuchongtianjie';
+  const b: BattleState = {
+    battleType, outcome: 'ongoing',
+    enemies: [], hand: [], drawPile: [], discardPile: [], exhaustPile: [],
+    player: { block: 0, blockElement: 'none', energy: 0, statuses: {}, attackBuffs: [] },
+    turn: 0, stance: null, shengBlocked: false, chain: [], tianren: false,
+    zhoutianTriggered: false, zhoutianTotal: 0,
+    sleeved: [], sleeveCapBonus: 0, lastPlayed: null, deqiCountTurn: 0,
+    cardsPlayed: 0, attacksPlayed: 0, playedByElement: {},
+    powers: [], huichunshuUses: 0, pendingChoice: null,
+    wuxingDanNext: false, longhuBonus: 0, tianjiActive: false,
+    waveIndex: isJiuchong ? 0 : -1, turnsTotal: 0, log: [],
+  };
+  run.battle = b;
+
+  if (isJiuchong) {
+    b.enemies = [spawnWave(run, b, 0)];
+  } else {
+    b.enemies = defs.map((d) => {
+      if (d.id === 'xinmo') {
+        // 金丹心魔劫：气血 = 380 + 40×心魔（§8.7）
+        const e = makeEnemy(run, d, d.hp + 40 * run.demon);
+        e.flags['demon'] = run.demon;
+        return e;
+      }
+      return makeEnemy(run, d);
+    });
+  }
+  run.flags['burnThisBattle'] = 0; // 成就"五雷轰顶"计数
+
+  // 心魔投影（§4.8）：按心魔值生成诅咒牌入抽牌堆（叠加式各 1 张）
+  const pile: CardInstance[] = run.deck.map((c) => ({ ...c }));
+  if (run.demon >= 3) pile.push(makeCard(run, 'chenyuan'));
+  if (run.demon >= 5) pile.push(makeCard(run, 'yezhang'));
+  if (run.demon >= 7) pile.push(makeCard(run, 'tanchen'));
+  if (run.demon >= 9) pile.push(makeCard(run, 'xinmo_curse'));
+  const shuffled = rngShuffle(run.rng, 'shuffle', pile);
+  run.rng = shuffled.state;
+  b.drawPile = shuffled.value;
+
+  // 法宝/道果/因果链"战斗开始"效果
+  if (run.battleStartBlock > 0) gainPlayerBlock(run, b, run.battleStartBlock, 'earth'); // 铁骨（土护体）
+  if (run.flags['chain_xianghuo'] && battleType === 'boss') {
+    gainPlayerBlock(run, b, 12, 'earth'); // 香火愿力：Boss 战开局 +12 土护体
+    delete run.flags['chain_xianghuo'];
+    log(b, '香火愿力护身，+12 土护体');
+  }
+  if (hasRelic(run, 'tianleicuiti')) {
+    for (const e of aliveEnemies(b)) enemyTakeAttack(run, b, e, 8);
+    playerSelfDamage(run, b, 3);
+    log(b, '天雷淬体！雷落全场');
+  }
+  // 丹毒 ≥4（药王鼎阈值 +4）：开战受 2 真伤
+  const toxinGate = hasFruit(run, 'yaowangding') ? 8 : 4;
+  if (run.toxin >= toxinGate && b.outcome === 'ongoing') {
+    playerLoseHp(run, b, 2);
+    log(b, '丹毒攻心，开战即受 2 点真伤');
+  }
+
+  // 妖怪图鉴收录
+  for (const e of b.enemies) run.flags[`seen_${e.enemyId}`] = 1;
+  if (isJiuchong) run.flags['seen_jiuchongtianjie'] = 1;
+
+  // 敌人亮出首回合意图
+  for (const e of aliveEnemies(b)) setIntent(run, b, e);
+
+  if (b.outcome !== 'ongoing') return;
+  startPlayerTurn(run, b);
+
+  // 河图：每场战斗开始行位初始为选定之行（在首回合开始后弹出，选择直接写入本回合行位）
+  if (hasRelic(run, 'hetu')) {
+    b.pendingChoice = {
+      kind: 'dilemma',
+      prompt: '河图微光流转：选定开局行位',
+      options: ELEMENTS.map((el) => ELEMENT_NAME[el]),
+      data: { hetu: 1 },
+    };
+  }
+}
+
+// ---------- 九重天劫波次 ----------
+
+function spawnWave(run: RunState, b: BattleState, index: number): EnemyState {
+  const w = JIUCHONG_WAVES[index];
+  let hp = w.hp;
+  let dmgBonus = 0;
+  if (w.id === 'daolei') {
+    hp += (run.demon + run.karma) * 10; // 道雷：+（心魔+业力）×10
+    if (run.flags['daolei_minus30']) hp = Math.max(1, hp - 30); // 拒绝心魔来访
+    // 第二形态：业力 ≥4 或九重天难度（两者叠加只加一次形态，数值再叠）
+    const forms = (run.karma >= 4 ? 1 : 0) + (run.ascension >= 9 ? 1 : 0);
+    if (forms > 0) {
+      hp += 90;
+      dmgBonus = 4 * forms;
     }
+  }
+  if (run.ascension >= 1) hp = Math.floor(hp * 1.1);
+  if (run.ascension >= 9) hp = Math.floor(hp * 1.1);
+  const e: EnemyState = {
+    uid: newUid(run), enemyId: w.id,
+    name: `第${'一二三四五六七八九'[index]}道·${w.name}`,
+    element: w.element, hp, maxHp: hp, block: 0, statuses: {}, moveIndex: 0,
+    intent: null, zhiseCd: 0, flags: { wave: index, dmgBonus },
+  };
+  // 道雷开场"诛心"：心魔 ≥6 时你手牌中费用最高的牌本场 +1 费
+  if (w.opener === 'zhuxin' && run.demon >= 6) {
+    let best: CardInstance | null = null;
+    let bestCost = -1;
+    for (const c of b.hand) {
+      const cost = getCard(c.cardId).cost;
+      if (typeof cost === 'number' && cost > bestCost) {
+        bestCost = cost;
+        best = c;
+      }
+    }
+    if (best) {
+      b.playedByElement[`_zhuxin_${best.uid}`] = 1;
+      log(b, `诛心！【${getCard(best.cardId).name}】本场费用 +1`);
+    }
+  }
+  return e;
+}
+
+function waveIntent(run: RunState, b: BattleState, e: EnemyState): EnemyMove {
+  const w = JIUCHONG_WAVES[e.flags['wave']];
+  const turns = e.flags['turns'] ?? 0;
+  if (w.special === 'tianfa' && turns > 0 && turns % 2 === 0) {
+    return { id: 'tianfa', name: '天罚', kind: 'attack', damage: 22, special: 'tianfa' };
+  }
+  if (w.special === 'wendao' && turns > 0 && turns % 3 === 0) {
+    return { id: 'wendao', name: '问道', kind: 'unknown', special: 'wendao' };
+  }
+  void b;
+  void run;
+  return {
+    id: 'leiji', name: '雷击', kind: 'attack',
+    damage: w.baseDamage + (e.flags['dmgBonus'] ?? 0), times: w.times,
+    special: w.special === 'ximie' || w.special === 'burnPlayer' ? w.special : undefined,
+  };
+}
+
+// ---------- 意图（敌方回合末声明；性情 ai 在声明时读玩家状态） ----------
+
+/** 心魔行为池（按开战时心魔值解锁；心魔每 +3 多复制 1 张 diyu） */
+function xinmoPool(demon: number): EnemyMove[] {
+  const def = getEnemy('xinmo');
+  const diyu = def.moves.find((m) => m.special === 'diyu')!;
+  const kaowen = def.moves.find((m) => m.special === 'kaowen')!;
+  const tunshi = def.moves.find((m) => m.special === 'tunshi')!;
+  const pool: EnemyMove[] = [diyu, tunshi];
+  if (demon >= 3) pool.push(kaowen);
+  if (demon >= 7) pool.push({ id: 'tanying', name: '贪影', kind: 'debuff', special: 'tanying' });
+  for (let i = 0; i < Math.floor(demon / 3); i++) pool.push(diyu);
+  return pool;
+}
+
+/** 蓄力被浇熄取消后的"普通行动" */
+function basicMove(e: EnemyState): EnemyMove {
+  const def = getEnemy(e.enemyId);
+  return def.moves.find((m) => m.kind === 'attack') ?? def.moves[0];
+}
+
+function setIntent(run: RunState, b: BattleState, e: EnemyState) {
+  // 九重天劫：波次驱动
+  if (b.waveIndex >= 0 && e.flags['wave'] !== undefined) {
+    e.intent = waveIntent(run, b, e);
+    return;
+  }
+
+  // 雷灵傀儡：第 4/8/12 回合劫雷 22/30/38（金属性攻击，提前一回合明示）
+  if (e.enemyId === 'leiling_kuilei') {
+    const nextTurn = b.turn + 1;
+    if (nextTurn === 4 || nextTurn === 8 || nextTurn === 12) {
+      const nth = nextTurn === 4 ? 1 : nextTurn === 8 ? 2 : 3;
+      const dmg = nth === 1 ? 22 : nth === 2 ? 30 : 38;
+      e.intent = {
+        id: 'jielei', name: `第${'一二三'[nth - 1]}道劫雷`, kind: 'attack',
+        damage: dmg, special: 'jielei', n: nth,
+      };
+      return;
+    }
+  }
+
+  // 心魔：蓄力 → 劫雷 → 动态行为池
+  if (e.enemyId === 'xinmo') {
+    if (e.flags['release']) {
+      const minions = aliveEnemies(b).filter((x) => x.enemyId === 'zhinian').length;
+      e.intent = {
+        id: 'xinmojielei', name: '心魔劫雷', kind: 'attack',
+        damage: 26 + 8 * minions, special: 'xinmojielei',
+      };
+      return;
+    }
+    if ((e.flags['charging'] ?? 0) > 0) {
+      e.intent = { id: 'xinmo_charge', name: '蓄力·劫数', kind: 'charge' };
+      return;
+    }
+    const pool = xinmoPool(e.flags['demon'] ?? 0);
+    e.intent = pool[e.moveIndex % pool.length];
+    return;
+  }
+
+  const def = getEnemy(e.enemyId);
+  const moves = def.moves;
+
+  // 性情脚本：声明时读玩家状态
+  if (def.ai === 'yehu' && b.hand.length >= 6) {
+    e.intent = moves.find((m) => m.id === 'meihuo') ?? moves[e.moveIndex % moves.length];
+    return;
+  }
+  if (def.ai === 'zheng' && b.player.block > 0 && b.player.blockElement === 'fire') {
+    e.intent = moves.find((m) => m.id === 'paoxiao') ?? moves[e.moveIndex % moves.length];
+    return;
+  }
+  const next = moves[e.moveIndex % moves.length];
+  if (def.ai === 'shanxiao' && next.id === 'duohunhao' && b.stance === 'metal') {
+    // 与你争锋：你行位为金时，夺魂嚎改为对你 11 伤
+    e.intent = { id: 'duohunhao_atk', name: '夺魂嚎', kind: 'attack', damage: 11 };
+    return;
+  }
+  e.intent = next;
+}
+
+/** 意图显示数值（含罡气与气滞修正，§4.6） */
+export function intentDamage(_b: BattleState, e: EnemyState): number | null {
+  if (!e.intent || e.intent.kind !== 'attack' || e.intent.damage === undefined) return null;
+  let dmg = e.intent.damage + (e.statuses.gangqi ?? 0);
+  if ((e.statuses.qizhi ?? 0) > 0) dmg = Math.floor(dmg * 0.7);
+  return dmg;
+}
+
+// ---------- 心魔相变 ----------
+
+/** 执念相变：每损失 1/3 血召分身 + 蓄力心魔劫雷（心魔 0 无相变） */
+function xinmoCheckPhase(run: RunState, b: BattleState, e: EnemyState) {
+  if (e.enemyId !== 'xinmo' || e.hp <= 0) return;
+  const demon = e.flags['demon'] ?? 0;
+  if (demon <= 0) return;
+  const third = e.maxHp / 3;
+  const phase = e.hp <= third ? 2 : e.hp <= third * 2 ? 1 : 0;
+  while ((e.flags['phase'] ?? 0) < phase) {
+    e.flags['phase'] = (e.flags['phase'] ?? 0) + 1;
+    run.flags['xinmoPhaseHp'] = run.hp; // 成就"身外化身"起点
+    const count = demon >= 6 ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      const z = makeEnemy(run, getEnemy('zhinian'));
+      b.enemies.push(z);
+      setIntent(run, b, z);
+    }
+    e.flags['charging'] = 2;
+    delete e.flags['release'];
+    e.intent = { id: 'xinmo_charge', name: '蓄力·劫数', kind: 'charge' };
+    log(b, `心魔相变："看看你心里都住着什么。"${count} 道执念具现！`);
   }
 }
 
 // ---------- 回合流程 ----------
 
 function startPlayerTurn(run: RunState, b: BattleState) {
+  if (b.outcome !== 'ongoing') return;
   b.turn += 1;
   b.turnsTotal += 1;
-  b.xingwei = null; // 行位回合开始清空
-  b.liushuiRefunded = 0;
-  b.liushuiCount = 0;
-  b.chainLinks = 0;
+
+  // 行位/链：回合开始清空；金丹"周天自运"跨回合保留（周天允许跨 2 回合累计）
+  if (run.realm === 'jindan') {
+    if (b.chain.length > 0) {
+      if (b.playedByElement['_chainCarry']) {
+        b.chain = [];
+        delete b.playedByElement['_chainCarry'];
+      } else {
+        b.playedByElement['_chainCarry'] = 1;
+      }
+    }
+  } else {
+    b.stance = null;
+    b.chain = [];
+    delete b.playedByElement['_chainCarry'];
+  }
+  b.shengBlocked = false;
+  b.tianren = false;
   b.zhoutianTriggered = false;
-  b.cardsPlayed = 0;
-  b.attacksPlayed = 0;
+  b.deqiCountTurn = 0;
+  b.sleeveCapBonus = 0;
   b.player.attackBuffs = [];
-  b.freeNextCard = false;
+  for (const k of Object.keys(b.playedByElement)) {
+    if (k.endsWith('_turn') || k === '_tengouUsed') delete b.playedByElement[k];
+  }
   for (const e of b.enemies) e.flags['hitThisTurn'] = 0;
 
-  // 1. 回合开始效果结算（固本、心法、法宝）
+  // 道果"婴儿抱丹"：回合开始若气海存灵 ≥4：+1 层固本并抽 1
+  if (hasFruit(run, 'yingerbaodan') && run.realm !== 'lianqi' && b.player.energy >= 4) {
+    addPlayerStatus(b, 'guben', 1);
+    drawCards(run, b, 1);
+  }
+
+  // 1. 吐纳（§4.2）：+4 与修正
+  let mod = 0;
+  if ((b.player.statuses.tunaDown ?? 0) > 0) {
+    mod -= b.player.statuses.tunaDown!;
+    delete b.player.statuses.tunaDown;
+  }
+  if (b.turn === 1 && run.gongdeBattles > 0) mod += 1; // 功德：开局吐纳 +1
+  if (b.turn === 1 && run.flags['xiaqian']) {
+    mod -= 1; // 山神下签
+    delete run.flags['xiaqian'];
+  }
+  if (run.flags['dailyLingchao']) mod += 1; // 每日天机·灵潮汹涌
+  // 心法"天一生水"：回合开始若行位为水（参悟：水或金）：吐纳 +2
+  const tys = findPower(b, 'tianyishengshui');
+  if (tys && (b.stance === 'water' || (tys.upgraded && b.stance === 'metal'))) mod += 2;
+  if (run.realm === 'lianqi') {
+    b.player.energy = Math.max(0, 4 + mod); // 炼气：不储存，回合开始重置
+  } else {
+    b.player.energy = Math.max(0, Math.min(run.poolCap, b.player.energy + 4 + mod)); // 气海储存
+  }
+
+  // 回合开始效果：固本（土护体）与"下回合护体"
   const guben = b.player.statuses.guben ?? 0;
-  if (guben > 0) gainBlock(run, b, guben * 2);
-
-  // 2. 灵气重置为上限；抽 5
-  let energy = run.energyMax;
-  if ((b.player.statuses.energyDown ?? 0) > 0) {
-    energy -= b.player.statuses.energyDown!;
-    delete b.player.statuses.energyDown;
-  }
-  if (b.turn === 1 && run.gongdeBattles > 0) energy += 1; // 功德
-  if (b.turn === 1 && run.flags['xiaqian']) { energy -= 1; delete run.flags['xiaqian']; }
-  if (b.turn === 3 && hasRelic(run, 'leijimu')) energy += 1;
-  if ((b.player.statuses.nextTurnEnergy ?? 0) > 0) {
-    energy += b.player.statuses.nextTurnEnergy!;
-    delete b.player.statuses.nextTurnEnergy;
-  }
-  if (run.flags['yingbianReady']) { energy += 2; delete run.flags['yingbianReady']; } // 婴变胎光
-  b.player.energy = Math.max(0, energy);
-
+  if (guben > 0) gainPlayerBlock(run, b, guben * 2, 'earth');
   if ((b.player.statuses.nextTurnBlock ?? 0) > 0) {
-    gainBlock(run, b, b.player.statuses.nextTurnBlock!);
+    gainPlayerBlock(run, b, b.player.statuses.nextTurnBlock!, 'none');
     delete b.player.statuses.nextTurnBlock;
   }
 
+  // 2. 袖藏牌先入手（北冥吞天：袖藏牌本回合费用 −1）
+  const beiming = findPower(b, 'beimingtuntian');
+  for (const c of b.sleeved) {
+    if (beiming) {
+      const cost = getCard(c.cardId).cost;
+      if (typeof cost === 'number') c.tempCost = Math.max(0, cost - 1);
+    }
+    b.hand.push(c);
+  }
+  b.sleeved = [];
+
+  // 再抽 run.drawPerTurn
   let draw = run.drawPerTurn;
-  if (run.flags['dailyQingshen']) draw += 1;
-  if (b.tianjiActive) draw += 1;
+  if (b.tianjiActive) draw += 1; // 天机丹
+  if (run.flags['dailyLingchao']) draw += 1;
+  if (run.flags['dailyWenluan']) draw += 1;
   if ((b.player.statuses.drawDown ?? 0) > 0) {
     draw -= b.player.statuses.drawDown!;
     delete b.player.statuses.drawDown;
   }
-  draw += powerN(b, 'beimingtuntian'); // 北冥吞天
   if ((b.player.statuses.nextTurnDraw ?? 0) > 0) {
     draw += b.player.statuses.nextTurnDraw!;
     delete b.player.statuses.nextTurnDraw;
   }
-  if (b.turn === 1 && run.flags['huangliang']) { draw += 2; delete run.flags['huangliang']; }
+  if (b.turn === 1 && run.flags['huangliang']) {
+    draw += 2; // 黄粱一梦：首回合抽 +2
+    delete run.flags['huangliang'];
+  }
   drawCards(run, b, Math.max(0, draw));
 }
 
-export function endTurn(run: RunState, b: BattleState) {
-  if (b.pendingChoice) return; // 有待决选择时不可结束回合
-  // 5. 回合结束效果结算
-  // 回春
+/**
+ * 结束回合（§4.2 步骤 4–5）。
+ * sleeveUids：袖藏选择（张数 ≤ 袖藏上限；sleeveBan 时无效；诅咒与 vanish 牌不可袖藏）。
+ */
+export function endTurn(run: RunState, b: BattleState, sleeveUids?: number[]) {
+  if (b.pendingChoice || b.outcome !== 'ongoing') return;
+
+  // 4. 袖藏
+  const wants = sleeveUids ?? [];
+  if ((b.player.statuses.sleeveBan ?? 0) <= 0 && wants.length > 0) {
+    const beiming = !!findPower(b, 'beimingtuntian');
+    let cap = beiming ? Infinity : 1 + (hasRelic(run, 'luoshu') ? 1 : 0) + b.sleeveCapBonus;
+    // 昆仑镜：每场 1 次，袖藏数量不设上限
+    if (!beiming && hasRelic(run, 'kunlunjing') && !b.playedByElement['_kunlunUsed'] && wants.length > cap) {
+      cap = Infinity;
+      b.playedByElement['_kunlunUsed'] = 1;
+      log(b, '昆仑镜倒转光阴，满手牌藏入袖中');
+    }
+    for (const uid of wants) {
+      if (b.sleeved.length >= cap) break;
+      const i = b.hand.findIndex((c) => c.uid === uid);
+      if (i < 0) continue;
+      const inst = b.hand[i];
+      if (inst.vanish || getCard(inst.cardId).type === 'curse') continue;
+      b.hand.splice(i, 1);
+      delete inst.tempCost;
+      b.sleeved.push(inst);
+    }
+  }
+
+  // 5. 回合结束效果
   const huichun = b.player.statuses.huichun ?? 0;
   if (huichun > 0) {
-    run.hp = Math.min(run.maxHp, run.hp + huichun);
+    heal(run, huichun);
     addPlayerStatus(b, 'huichun', -1);
   }
-  // 古木长青
   const gumu = powerN(b, 'gumuchangqing');
-  if (gumu > 0) run.hp = Math.min(run.maxHp, run.hp + gumu);
-  // 玩家灼烧（燹雷等对玩家的灼烧同规则；天火燎原结算 ×2）
-  const pZhuoshao = b.player.statuses.zhuoshao ?? 0;
-  if (pZhuoshao > 0) {
-    playerDamage(run, b, run.flags['dailyTianhuo'] ? pZhuoshao * 2 : pZhuoshao, { pierce: true });
-    addPlayerStatus(b, 'zhuoshao', -1);
+  if (gumu > 0) heal(run, gumu);
+  // 你身上的灼烧：受层数真伤后减半（向下取整）；天火燎原：不衰减
+  const pZhuo = b.player.statuses.zhuoshao ?? 0;
+  if (pZhuo > 0) {
+    playerLoseHp(run, b, pZhuo);
     if (b.outcome !== 'ongoing') return;
+    if (!run.flags['dailyTianhuo']) {
+      b.player.statuses.zhuoshao = Math.floor(pZhuo / 2);
+      if (b.player.statuses.zhuoshao <= 0) delete b.player.statuses.zhuoshao;
+    }
   }
-  // 心魔诅咒：回合结束仍在手牌受 2 伤
+  // 心魔诅咒：回合结束仍在手牌受 3 真伤（§5.5）
   for (const c of b.hand) {
     if (c.cardId === 'xinmo_curse') {
-      playerDamage(run, b, 2, { pierce: true });
+      playerLoseHp(run, b, 3);
       if (b.outcome !== 'ongoing') return;
     }
   }
-  // 婴变胎光：未打出攻击牌 → 下回合 +2 灵气
-  if (hasRelic(run, 'yingbiantaiguang') && b.attacksPlayed === 0) run.flags['yingbianReady'] = 1;
 
-  // 玩家负面按回合衰减
-  addPlayerStatus(b, 'xuruo', -Math.min(1, b.player.statuses.xuruo ?? 0));
-  addPlayerStatus(b, 'yishang', -Math.min(1, b.player.statuses.yishang ?? 0));
-  addPlayerStatus(b, 'handCapDown', -Math.min(1, b.player.statuses.handCapDown ?? 0));
-  addPlayerStatus(b, 'blockHalf', -Math.min(1, b.player.statuses.blockHalf ?? 0));
-  delete b.player.statuses.guishaDan;
-  // 藤偶剩余回合
-  if ((b.player.statuses.tengou ?? 0) > 0) addPlayerStatus(b, 'tengou', -1);
-
-  // 6. 弃置全部手牌（洛书可保留 1 张；保留牌回合末放逐的复制品仍放逐）
-  const keep: CardInstance[] = [];
-  if (hasRelic(run, 'luoshu') && b.hand.length > 0) {
-    const kept = b.hand.find((c) => !c.vanish && getCard(c.cardId).type !== 'curse');
-    if (kept) keep.push(kept);
-  }
+  // 弃置全部手牌
   for (const c of b.hand) {
-    if (keep.includes(c)) continue;
+    delete c.tempCost;
     if (c.vanish) b.exhaustPile.push(c);
     else b.discardPile.push(c);
   }
-  b.hand = keep;
-  for (const c of b.hand) delete c.tempCost;
+  b.hand = [];
+  b.tianren = false;
+  b.shengBlocked = false;
 
-  // 单次性回合状态清理
-  delete b.player.statuses.fanci;
-  delete b.player.statuses.fanshao;
+  // 玩家按回合衰减的状态
+  addPlayerStatus(b, 'qizhi', -Math.min(1, b.player.statuses.qizhi ?? 0));
+  addPlayerStatus(b, 'pozhan', -Math.min(1, b.player.statuses.pozhan ?? 0));
+  addPlayerStatus(b, 'sleeveBan', -Math.min(1, b.player.statuses.sleeveBan ?? 0));
+  addPlayerStatus(b, 'blockHalf', -Math.min(1, b.player.statuses.blockHalf ?? 0));
+  if ((b.player.statuses.tengou ?? 0) > 0) addPlayerStatus(b, 'tengou', -1);
 
-  enemyTurn(run, b);
+  enemyPhase(run, b);
 }
 
-function enemyTurn(run: RunState, b: BattleState) {
-  // 按站位从左到右依次执行已亮出的意图
+function enemyPhase(run: RunState, b: BattleState) {
+  // 敌人护体同步减半（承接了上个玩家回合的旧护体在此衰减；本回合新获得的护体保持完整）
+  for (const e of aliveEnemies(b)) e.block = Math.floor(e.block / 2);
+
+  // 按站位从左到右执行意图
   for (const e of [...b.enemies]) {
     if (e.hp <= 0 || b.outcome !== 'ongoing') continue;
-    // 滞涩：本回合不行动，意图保留
     if (e.flags['zhise']) {
       delete e.flags['zhise'];
       log(b, `${e.name} 意图延迟`);
@@ -617,36 +897,45 @@ function enemyTurn(run: RunState, b: BattleState) {
     }
     enemyAct(run, b, e);
     if (b.outcome !== 'ongoing') return;
+    // 瘴毒：每次行动结算后受层数伤害
+    const du = e.statuses.zhangdu ?? 0;
+    if (e.hp > 0 && du > 0) enemyLoseHp(run, b, e, du);
   }
-  // 敌方状态结算（灼烧/瘴毒 → 敌方回合结束）
+  if (b.outcome !== 'ongoing') return;
+
+  // 敌方状态结算（各自回合结束）
+  const wandu = findPower(b, 'wandushixin');
   for (const e of aliveEnemies(b)) {
     const zhuo = e.statuses.zhuoshao ?? 0;
     if (zhuo > 0) {
-      // 每日天机·天火燎原：灼烧结算 ×2
-      enemyLoseHp(run, b, e, run.flags['dailyTianhuo'] ? zhuo * 2 : zhuo); // 真实伤害，无视护体
-      if (e.hp > 0) addEnemyStatus(run, b, e, 'zhuoshao', -1);
-    }
-    if (e.hp <= 0) continue;
-    const du = e.statuses.zhangdu ?? 0;
-    if (du > 0) {
-      enemyLoseHp(run, b, e, du);
-      if (e.hp > 0) {
-        const wandu = hasPower(b, 'wandushixin');
-        if (wandu) addEnemyStatus(run, b, e, 'zhangdu', powerN(b, 'wandushixin')); // 不衰减且每回合 +N
-        else addEnemyStatus(run, b, e, 'zhangdu', -1);
+      enemyLoseHp(run, b, e, zhuo); // 真实伤害
+      if (e.hp > 0 && !run.flags['dailyTianhuo']) {
+        if (hasRelic(run, 'dengxincao')) addEnemyStatus(run, b, e, 'zhuoshao', -1); // 灯芯草：−1 衰减
+        else {
+          e.statuses.zhuoshao = Math.floor(zhuo / 2);
+          if (e.statuses.zhuoshao <= 0) delete e.statuses.zhuoshao;
+        }
       }
     }
     if (e.hp <= 0) continue;
-    // 衰减
-    if ((e.statuses.xuruo ?? 0) > 0) addEnemyStatus(run, b, e, 'xuruo', -1);
-    if ((e.statuses.yishang ?? 0) > 0) addEnemyStatus(run, b, e, 'yishang', -1);
-    delete e.statuses.pojia; // 破甲持续 1 回合
+    // 瘴毒衰减：其回合结束 −1；万毒噬心：不衰减（参悟：每回合全体 +1）
+    if ((e.statuses.zhangdu ?? 0) > 0) {
+      if (!wandu) addEnemyStatus(run, b, e, 'zhangdu', -1);
+      else if (wandu.upgraded) addEnemyStatus(run, b, e, 'zhangdu', 1);
+    }
+    if ((e.statuses.qizhi ?? 0) > 0) addEnemyStatus(run, b, e, 'qizhi', -1);
+    if ((e.statuses.pozhan ?? 0) > 0) addEnemyStatus(run, b, e, 'pozhan', -1);
+    delete e.statuses.ruanhua; // 软化持续 1 回合
+    delete e.flags['noBlock']; // 破土的"本回合无法获得护体"
     if (e.zhiseCd > 0) e.zhiseCd -= 1;
     if ((e.flags['jingji'] ?? 0) > 0) e.flags['jingji'] -= 1;
-    // 狂暴（无常/雷灵傀儡第三道劫雷后）
+    // 狂暴（无常 / 雷灵傀儡三道劫雷后）：每回合 +2 罡气
     if (e.flags['rage']) e.statuses.gangqi = (e.statuses.gangqi ?? 0) + 2;
     // 奔雷：每回合 +1 罡气
-    if (e.enemyId === 'benlei') e.statuses.gangqi = (e.statuses.gangqi ?? 0) + 1;
+    if (b.waveIndex >= 0 && e.flags['wave'] !== undefined
+      && JIUCHONG_WAVES[e.flags['wave']].special === 'gangqiPerTurn') {
+      e.statuses.gangqi = (e.statuses.gangqi ?? 0) + 1;
+    }
     // 道雷回光：低于 30% 血 +3 罡气（一次）
     if (e.enemyId === 'daolei' && e.hp < e.maxHp * 0.3 && !e.flags['huiguang']) {
       e.flags['huiguang'] = 1;
@@ -657,27 +946,27 @@ function enemyTurn(run: RunState, b: BattleState) {
   }
   if (b.outcome !== 'ongoing') return;
 
-  // 亮出下回合意图
+  // 亮出下回合意图（性情 ai 在此读玩家状态）
   for (const e of aliveEnemies(b)) {
     e.moveIndex += 1;
     setIntent(run, b, e);
   }
 
-  // 玩家护体清零（除保留类效果）
+  // 玩家护体衰减链
   if ((b.player.statuses.retainBlock ?? 0) > 0) {
-    delete b.player.statuses.retainBlock; // 玄武镇海：保留一次
+    addPlayerStatus(b, 'retainBlock', -1); // 消耗一次
+  } else if (hasRelic(run, 'xuanguijia') && b.player.blockElement === 'earth') {
+    // 玄龟甲：土属性护体不衰减
+  } else if (findPower(b, 'houdezaiwu')) {
+    b.player.block = Math.max(0, b.player.block - powerN(b, 'houdezaiwu')); // 减半改固定 −n
   } else {
-    const retain = Math.max(
-      powerN(b, 'houdezaiwu'),
-      run.breakthroughs.includes('houde_genji') ? 10 : 0,
-    );
-    b.player.block = Math.min(b.player.block, retain);
+    b.player.block = Math.floor(b.player.block / 2);
   }
-  delete b.player.statuses['_baguaUsed' as StatusId];
 
-  if (run.gongdeBattles > 0 && b.turn === 1) {
-    // 功德计数在战斗结束时递减（见 run.ts）
-  }
+  // 覆盖敌方回合的单次性状态
+  delete b.player.statuses.guixiDan;
+  delete b.player.statuses.fanci;
+  delete b.player.statuses.fanshao;
 
   startPlayerTurn(run, b);
 }
@@ -686,136 +975,146 @@ function enemyAct(run: RunState, b: BattleState, e: EnemyState) {
   const move = e.intent;
   if (!move) return;
 
-  // 固本（§4.5 双方通用）：敌方回合开始每层 +2 护体
+  // 固本（双方通用）：行动开始每层 +2 护体（敌人产生其自身属性护体）
   const guben = e.statuses.guben ?? 0;
   if (guben > 0) enemyGainBlock(e, guben * 2);
-
-  // 三重天强化：雷灵傀儡雷引附带 1 层固本（§11.2 Boss 额外行为）
-  if (run.ascension >= 3 && e.enemyId === 'leiling_kuilei' && move.id === 'leiyin') {
-    e.statuses.guben = (e.statuses.guben ?? 0) + 1;
-  }
-  // 铜甲尸被动：每回合 +6 护体；每第 4 回合尸毒
-  if (e.enemyId === 'tongjiashi') {
-    enemyGainBlock(e, 6);
-    if (b.turn % 4 === 0) {
-      b.discardPile.push(makeCard(run, 'chenyuan'));
-      log(b, '铜甲尸尸毒侵体，一张【尘缘】混入弃牌堆');
-    }
-  }
-  // 阴兵列阵：存活 ≥2 各 +4 护体/回合
+  // 铜甲尸被动：每回合 +8 金护体
+  if (e.enemyId === 'tongjiashi') enemyGainBlock(e, 8);
+  // 阴兵列阵：存活 ≥2 时各 +5 护体/回合
   if (e.enemyId === 'yinbing' && aliveEnemies(b).filter((x) => x.enemyId === 'yinbing').length >= 2) {
-    enemyGainBlock(e, 4);
+    enemyGainBlock(e, 5);
   }
-  // 鼎炉傀儡炉温：永久罡气在 move 本身处理
 
-  // 特殊行为
   switch (move.special) {
-    case 'zhaohun': { // 白无常招魂幡：为黑 +3 罡气或 +8 护体
+    case 'zhaohun': { // 白无常招魂幡：为黑无常 +3 罡气或 +10 护体
       const hei = aliveEnemies(b).find((x) => x.enemyId === 'heiwuchang');
       if (hei) {
         const r = rngInt(run.rng, 'enemyAI', 0, 1);
         run.rng = r.state;
         if (r.value === 0) hei.statuses.gangqi = (hei.statuses.gangqi ?? 0) + 3;
-        else enemyGainBlock(hei, 8);
+        else enemyGainBlock(hei, 10);
         log(b, '白无常摇动招魂幡');
       }
-      e.moveIndex += 0;
-      return finishMove(run, b, e, move);
+      return finishEnemyMove(run, b, e);
     }
-    case 'huanmian': { // 傩面鬼换面
+    case 'huanmian': { // 傩面鬼换面：+10 护体 / +2 罡气 / 施你气滞 1
       const r = rngInt(run.rng, 'enemyAI', 0, 2);
       run.rng = r.state;
-      if (r.value === 0) enemyGainBlock(e, 8);
+      if (r.value === 0) enemyGainBlock(e, 10);
       else if (r.value === 1) e.statuses.gangqi = (e.statuses.gangqi ?? 0) + 2;
-      else addPlayerStatus(b, 'xuruo', 1);
-      return finishMove(run, b, e, move);
+      else addPlayerStatus(b, 'qizhi', 1);
+      return finishEnemyMove(run, b, e);
     }
-    case 'beiqi': { // 骨女悲泣：牌库顶 2 张进弃牌堆
+    case 'beiqi': { // 骨女悲泣：你牌库顶 2 张进弃牌堆
       for (let i = 0; i < 2 && b.drawPile.length > 0; i++) b.discardPile.push(b.drawPile.shift()!);
-      return finishMove(run, b, e, move);
+      return finishEnemyMove(run, b, e);
     }
-    case 'diyu': { // 心魔低语：复制你基础伤害最高的攻击牌打向你
+    case 'zhihun': // 勾魂：你心魔 +1
+      run.demon = Math.max(0, Math.min(9, run.demon + 1));
+      log(b, `${e.name} 勾魂摄魄，心魔 +1`);
+      return finishEnemyMove(run, b, e);
+    case 'shidu': // 尸毒：你丹毒 +1
+      run.toxin = Math.max(0, Math.min(12, run.toxin + 1));
+      log(b, `${e.name} 喷出尸毒，丹毒 +1`);
+      return finishEnemyMove(run, b, e);
+    case 'zhiwang': // 织网：你本回合结束无法袖藏
+      addPlayerStatus(b, 'sleeveBan', 1);
+      return finishEnemyMove(run, b, e);
+    case 'baidu': // 摆渡：你 2 回合无法袖藏
+      addPlayerStatus(b, 'sleeveBan', 2);
+      return finishEnemyMove(run, b, e);
+    case 'touling': // 偷灵：你下回合吐纳 −1
+      addPlayerStatus(b, 'tunaDown', 1);
+      return finishEnemyMove(run, b, e);
+    case 'tanying': { // 贪影：洗 1 张【贪嗔】入你抽牌堆
+      const curse = makeCard(run, 'tanchen');
+      const r = rngInt(run.rng, 'shuffle', 0, b.drawPile.length);
+      run.rng = r.state;
+      b.drawPile.splice(r.value, 0, curse);
+      log(b, '一缕贪影没入你的牌库');
+      return finishEnemyMove(run, b, e);
+    }
+    case 'diyu': { // 心魔低语：复制你卡组基础伤害最高的攻击牌打向你
       let best = 0;
       for (const c of run.deck) {
         const def = getCard(c.cardId);
         if (def.type !== 'attack') continue;
-        const eff = c.upgraded ? def.up : def.base;
+        const eff = c.upgraded ? def.upBase : def.base;
         const total = (eff.damage ?? 0) * (eff.times ?? 1);
         if (total > best) best = total;
       }
       const dmg = Math.max(6, best);
       log(b, `心魔低语："这是你自己的刀。"（${dmg} 伤）`);
-      dealEnemyAttack(run, b, e, dmg, 1);
-      return finishMove(run, b, e, move);
+      playerTakeAttack(run, b, e, dmg);
+      return finishEnemyMove(run, b, e);
     }
-    case 'kaowen': { // 道心拷问：弃 2 张手牌 或 受 14 伤（三重天强化：弃 3 / 受 18）
-      const hard = run.ascension >= 3;
+    case 'kaowen': { // 道心拷问：弃 2 或受 16（心魔 ≥5：弃 3 或受 22）
+      const hard = (e.flags['demon'] ?? run.demon) >= 5;
       b.pendingChoice = {
         kind: 'dilemma', prompt: '心魔逼问："你的道，经得起舍弃吗？"',
-        options: [`弃 ${hard ? 3 : 2} 张手牌`, `受 ${hard ? 18 : 14} 伤`],
-        data: { discard: hard ? 3 : 2, damage: hard ? 18 : 14 },
+        options: [`弃 ${hard ? 3 : 2} 张手牌`, `受 ${hard ? 22 : 16} 伤`],
+        data: { discard: hard ? 3 : 2, damage: hard ? 22 : 16 },
       };
-      return finishMove(run, b, e, move);
+      return finishEnemyMove(run, b, e);
     }
-    case 'tunshi': { // 吞噬：12 伤并自回 12
-      const loss = dealEnemyAttack(run, b, e, move.damage ?? 12, 1);
-      e.hp = Math.min(e.maxHp, e.hp + 12);
-      void loss;
-      return finishMove(run, b, e, move);
+    case 'tunshi': { // 吞噬：攻击并自回 14
+      playerTakeAttack(run, b, e, move.damage ?? 14);
+      e.hp = Math.min(e.maxHp, e.hp + 14);
+      return finishEnemyMove(run, b, e);
     }
-    case 'xinmojielei': { // 心魔劫雷
+    case 'xinmojielei': { // 心魔劫雷 26（存活分身每只 +8）
       const minions = aliveEnemies(b).filter((x) => x.enemyId === 'zhinian').length;
-      dealEnemyAttack(run, b, e, 24 + 6 * minions, 1);
-      e.flags['charging'] = 0;
-      return finishMove(run, b, e, move);
+      playerTakeAttack(run, b, e, 26 + 8 * minions);
+      delete e.flags['release'];
+      return finishEnemyMove(run, b, e);
     }
-    case 'xisui': { // 吸髓：对你 8 伤并自回等量
-      const loss = dealEnemyAttack(run, b, e, move.damage ?? 8, 1);
+    case 'xisui': { // 吸髓：对你 9 伤并自回等量
+      const loss = playerTakeAttack(run, b, e, move.damage ?? 9);
       e.hp = Math.min(e.maxHp, e.hp + loss);
-      return finishMove(run, b, e, move);
+      return finishEnemyMove(run, b, e);
     }
-    case 'jingji': { // 荆棘姿态
+    case 'jingji': // 荆棘姿态：2 回合内你每次攻击它受 n 伤
       e.flags['jingji'] = 2;
-      e.flags['jingjiN'] = move.n ?? 4;
-      return finishMove(run, b, e, move);
+      e.flags['jingjiN'] = move.n ?? 5;
+      return finishEnemyMove(run, b, e);
+    case 'suijia': { // 横扫：击碎你 n 点护体后攻击
+      b.player.block = Math.max(0, b.player.block - (move.n ?? 6));
+      if (move.damage !== undefined) playerTakeAttack(run, b, e, move.damage);
+      return finishEnemyMove(run, b, e);
     }
-    case 'suijia': { // 横扫：击碎你 4 点护体后 12 伤
-      b.player.block = Math.max(0, b.player.block - (move.n ?? 4));
-      dealEnemyAttack(run, b, e, move.damage ?? 12, 1);
-      return finishMove(run, b, e, move);
-    }
-    case 'jielei': { // 雷灵傀儡劫雷（三重天强化：+4 伤；成就"三劫齐渡"记录承伤）
-      const dmg = (move.damage ?? 18) + (run.ascension >= 3 ? 4 : 0);
-      const loss = dealEnemyAttack(run, b, e, dmg, 1);
-      if (loss > 0) run.flags['jieleiDirty'] = 1;
+    case 'jielei': { // 筑基劫雷（金属性攻击）
+      const loss = playerTakeAttack(run, b, e, move.damage ?? 22);
+      if (loss > 0) run.flags['jieleiDirty'] = 1; // 成就"三劫齐渡"
       else run.flags['jieleiClean'] = (run.flags['jieleiClean'] ?? 0) + 1;
-      return finishMove(run, b, e, move);
+      if ((move.n ?? 0) >= 3) e.flags['rage'] = 1; // 三道后狂暴：每回合 +2 罡气
+      return finishEnemyMove(run, b, e);
     }
-    case 'tianfa': { // 灭雷天罚：护体承接 ≥10 则减半
-      let dmg = move.damage ?? 20;
-      if (b.player.block >= 10) dmg = Math.floor(dmg / 2);
-      dealEnemyAttack(run, b, e, dmg, 1);
-      return finishMove(run, b, e, move);
+    case 'tianfa': { // 灭雷天罚 22：护体承接 ≥12 则减半
+      let dmg = move.damage ?? 22;
+      if (b.player.block >= 12) dmg = Math.floor(dmg / 2);
+      playerTakeAttack(run, b, e, dmg);
+      return finishEnemyMove(run, b, e);
     }
-    case 'wendao': { // 道雷问道：弃 3 张或受 18 伤
+    case 'wendao': // 道雷问道：弃 3 张或受 20 伤
       b.pendingChoice = {
         kind: 'dilemma', prompt: '雷声如问："何为道？"',
-        options: ['弃 3 张手牌', '受 18 伤'], data: { discard: 3, damage: 18 },
+        options: ['弃 3 张手牌', '受 20 伤'],
+        data: { discard: 3, damage: 20 },
       };
-      return finishMove(run, b, e, move);
-    }
+      return finishEnemyMove(run, b, e);
   }
 
   // 常规行为
   if (move.kind === 'attack' && move.damage !== undefined) {
-    dealEnemyAttack(run, b, e, move.damage, move.times ?? 1);
-    // 玄雷：攻击附带熄灭你 1 层增益
-    if (e.enemyId === 'xuanlei') {
-      if ((b.player.statuses.gangqi ?? 0) > 0) addPlayerStatus(b, 'gangqi', -1);
-      else if ((b.player.statuses.guben ?? 0) > 0) addPlayerStatus(b, 'guben', -1);
+    const times = move.times ?? 1;
+    for (let i = 0; i < times; i++) {
+      if (b.outcome !== 'ongoing') return;
+      playerTakeAttack(run, b, e, move.damage);
     }
-    // 燹雷：攻击附带你 2 灼烧
-    if (e.enemyId === 'xianlei') addPlayerStatus(b, 'zhuoshao', 2);
+    if (b.outcome !== 'ongoing') return;
+    // 九重天劫附带效果
+    if (move.special === 'ximie') removePlayerBuff(b); // 玄雷：移除你 1 层增益
+    if (move.special === 'burnPlayer') addPlayerStatus(b, 'zhuoshao', 2); // 燹雷
   }
   if (move.block) enemyGainBlock(e, move.block);
   if (move.gainSelf) {
@@ -828,57 +1127,24 @@ function enemyAct(run: RunState, b: BattleState, e: EnemyState) {
   }
   if (move.loseSelfHp) enemyLoseHp(run, b, e, move.loseSelfHp);
   if (move.healSelf) e.hp = Math.min(e.maxHp, e.hp + move.healSelf);
-  if (move.addCurse) {
-    b.discardPile.push(makeCard(run, move.addCurse));
-    log(b, `${e.name} 将一张诅咒塞入你的弃牌堆`);
-  }
-  finishMove(run, b, e, move);
+  finishEnemyMove(run, b, e);
 }
 
-function finishMove(run: RunState, b: BattleState, e: EnemyState, _move: EnemyMove) {
-  // 心魔：属性轮转与相变
-  if (e.enemyId === 'xinmo') {
-    // 每 2 回合按相生顺序切换五行（初始无属性 → 木起）
-    if (b.turn % 2 === 0) {
-      const order: Element[] = ['wood', 'fire', 'earth', 'metal', 'water'];
-      const cur = e.element === 'none' ? -1 : order.indexOf(e.element as Element);
-      e.element = order[(cur + 1) % 5];
-      log(b, `心魔道则流转，化为${{ wood: '木', fire: '火', earth: '土', metal: '金', water: '水' }[e.element as Element]}行`);
-    }
-    // 相变（50% 血）：执念具现
-    if (!e.flags['phase2'] && e.hp <= e.maxHp / 2) {
-      e.flags['phase2'] = 1;
-      e.flags['charging'] = 2;
-      run.flags['xinmoPhaseHp'] = run.hp; // 成就"身外化身"：相变起点气血
-      const z1 = makeEnemy(run, getEnemy('zhinian'));
-      const z2 = makeEnemy(run, getEnemy('zhinian'));
-      b.enemies.push(z1, z2);
-      setIntent(run, b, z1);
-      setIntent(run, b, z2);
-      log(b, '心魔相变："看看你心里都住着什么。"两道执念具现！');
-    } else if (e.flags['charging'] === 2) {
-      e.flags['charging'] = 1;
-    }
+function finishEnemyMove(run: RunState, b: BattleState, e: EnemyState) {
+  if (e.enemyId !== 'xinmo' || e.hp <= 0) return;
+  // 属性轮转：每 2 回合按相生顺序切换（初始无属性 → 木起），攻击属性同步变
+  if (b.turn % 2 === 0) {
+    const order: Element[] = ['wood', 'fire', 'earth', 'metal', 'water'];
+    const cur = e.element === 'none' ? -1 : order.indexOf(e.element as Element);
+    e.element = order[(cur + 1) % 5];
+    log(b, `心魔道则流转，化为${ELEMENT_NAME[e.element as Element]}行`);
   }
-}
-
-/** 敌人对玩家的攻击（含加值与乘区），返回总掉血 */
-function dealEnemyAttack(run: RunState, b: BattleState, e: EnemyState, base: number, times: number): number {
-  let total = 0;
-  for (let i = 0; i < times; i++) {
-    if (b.outcome !== 'ongoing') break;
-    let dmg = base + (e.statuses.gangqi ?? 0);
-    if (run.ascension >= 6) dmg = Math.floor(dmg * 1.15); // 六重天：敌人伤害 +15%
-    // 缠缚：下次攻击 −40%/层（消耗）
-    const chanfu = e.statuses.chanfu ?? 0;
-    if (chanfu > 0) {
-      for (let j = 0; j < chanfu; j++) dmg = Math.floor(dmg * 0.6);
-      delete e.statuses.chanfu;
-    }
-    if ((e.statuses.xuruo ?? 0) > 0) dmg = Math.floor(dmg * 0.75);
-    total += playerDamage(run, b, dmg, { isAttack: true, source: e });
+  // 蓄力倒计时（劫数）
+  if ((e.flags['charging'] ?? 0) > 0) {
+    e.flags['charging'] -= 1;
+    if (e.flags['charging'] === 0) e.flags['release'] = 1;
   }
-  return total;
+  void run;
 }
 
 // ---------- 出牌 ----------
@@ -886,322 +1152,427 @@ function dealEnemyAttack(run: RunState, b: BattleState, e: EnemyState, base: num
 export function cardCost(run: RunState, b: BattleState, inst: CardInstance): number {
   const def = getCard(inst.cardId);
   if (inst.tempCost !== undefined) return inst.tempCost;
-  if (b.freeNextCard) return 0;
   let cost: number;
   if (def.cost === 'X') cost = b.player.energy;
   else cost = def.cost;
-  if (def.id === 'beimingtuntian' && inst.upgraded) cost = 3;
-  // 昆仑镜：每回合第一张牌 −1
-  if (hasRelic(run, 'kunlunjing') && b.cardsPlayed === 0) cost -= 1;
+  if (def.id === 'beimingtuntian' && inst.upgraded) cost = 3; // 参悟：费用 3
+  if (def.id === 'wuxinglunzhuan' && inst.upgraded) cost = 0; // 参悟：本牌费用 0
+  // 诛心：手牌中费用最高的牌本场 +1 费
+  if (b.playedByElement[`_zhuxin_${inst.uid}`]) cost += 1;
   // 上善若水：每回合前 N 张水牌 −1
-  const ruoshui = powerN(b, 'shangshanruoshui');
-  if (ruoshui > 0 && def.element === 'water' && (b.playedByElement['water_turn'] ?? 0) < ruoshui) cost -= 1;
+  const ruoshui = findPower(b, 'shangshanruoshui');
+  if (ruoshui && def.element === 'water'
+    && (b.playedByElement['water_turn'] ?? 0) < (ruoshui.upgraded ? 2 : 1)) cost -= 1;
+  // 道法自然（参悟）：每回合第一张无属性牌 −1
+  const dfzr = findPower(b, 'daofaziran');
+  if (dfzr?.upgraded && def.element === 'none' && !def.dual
+    && (b.playedByElement['none_turn'] ?? 0) === 0) cost -= 1;
   // 每日天机·木行昌盛：木牌 −1 费
   if (run.flags['dailyMuxing'] && def.element === 'wood') cost -= 1;
   return Math.max(0, cost);
 }
 
 export function canPlay(run: RunState, b: BattleState, inst: CardInstance): boolean {
-  if (b.pendingChoice) return false;
+  if (b.pendingChoice || b.outcome !== 'ongoing') return false;
   const def = getCard(inst.cardId);
   if (def.type === 'curse' && !def.playableCurse) return false;
   return cardCost(run, b, inst) <= b.player.energy;
 }
 
-export function playCard(run: RunState, b: BattleState, uid: number, target?: number) {
+export function playCard(
+  run: RunState, b: BattleState, uid: number, target?: number, dualPick?: 'a' | 'b',
+) {
+  if (b.outcome !== 'ongoing') return;
   const idx = b.hand.findIndex((c) => c.uid === uid);
   if (idx < 0) return;
   const inst = b.hand[idx];
   if (!canPlay(run, b, inst)) return;
   const def = getCard(inst.cardId);
-  const eff = effectsOf(inst);
   const cost = cardCost(run, b, inst);
   const xCost = def.cost === 'X' ? cost : 0;
 
   b.hand.splice(idx, 1);
   b.player.energy -= cost;
-  if (b.freeNextCard) b.freeNextCard = false;
 
-  // ---- 行云流水判定（§4.4 ①）----
-  let element: CardElement = def.element;
-  let liushui = false;
+  // ---- 行位判定（types.ts 契约）：elem = dual ? 所选行 : def.element ----
+  const pickB = def.dual ? dualPick === 'b' : false;
+  let elem: CardElement = def.dual ? def.dual.elements[pickB ? 1 : 0] : def.element;
+  const oldStance = b.stance;
+
+  // 随行：太极图（双行与无属性牌）/ 道法自然（无属性牌）——打出时视作当前行位所生
+  const suixing =
+    (hasRelic(run, 'taijitu') && (!!def.dual || def.element === 'none'))
+    || (!!findPower(b, 'daofaziran') && def.element === 'none' && !def.dual);
+  if (suixing && oldStance) elem = SHENG[oldStance];
+
+  // 五行丹：下一张牌视为任意行（必得气）
+  let forced = false;
   if (b.wuxingDanNext) {
-    // 五行丹：视为任意五行，必触发行云流水
-    liushui = !curseInHand(b, 'yinguozhai');
-    if (b.xingwei) element = SHENG[b.xingwei];
     b.wuxingDanNext = false;
-  } else if (element !== 'none' && b.xingwei && generates(b.xingwei, element)) {
-    liushui = !curseInHand(b, 'yinguozhai'); // 因果债：行云流水不触发
+    forced = true;
+    if (oldStance) elem = SHENG[oldStance];
   }
 
-  let mult = 1;
-  if (liushui) {
-    mult = 1 + run.liushuiBonus;
-    b.liushuiCount += 1;
-    // 返还灵气
-    let refund = 0;
-    if (b.liushuiRefunded < refundCap(run, b)) refund = 1;
-    if (b.liushuiCount === 1) {
-      if (hasRelic(run, 'wuxingzhu')) refund += 1; // 五行珠
-      if (run.breakthroughs.includes('tianshengdaoti')) refund += 1;
+  // ---- 得气判定 ----
+  const hasSheng = !!def.sheng || !!def.dual;
+  let deqi = false;
+  if (elem !== 'none' && hasSheng && !curseInHand(b, 'yinguozhai')) {
+    if (forced) deqi = true; // 必得气（无视滞气）
+    else if (!b.shengBlocked) {
+      if (b.tianren) deqi = true; // 天人合一：双段齐发（无视行位）
+      else if (hasFruit(run, 'jiantai') && def.element === 'metal') deqi = true; // 剑胎
+      else if (oldStance && generates(oldStance, elem)) deqi = true;
+      else if (hasFruit(run, 'niyunzhenqi') && oldStance && overcomes(elem, oldStance)) deqi = true; // 逆运真气
     }
-    b.player.energy += refund;
-    b.liushuiRefunded += Math.min(1, refund);
-    b.chainLinks += 1;
-    log(b, `行云流水！（${b.chainLinks} 连）`);
-  } else if (element !== 'none') {
-    b.chainLinks = 0; // 有属性但未接上 → 断链，从头计数触发次数
+  }
+  if (b.tianren && deqi) b.tianren = false; // 消耗后清除
+  if (b.shengBlocked && elem !== 'none') b.shengBlocked = false; // 滞气消耗
+
+  // 罚雷场效果：每回合第 3 次起的得气不触发得气段
+  let shengActive = deqi;
+  if (deqi) {
+    b.deqiCountTurn += 1;
+    if (deqiCapActive(b) && b.deqiCountTurn >= 3) {
+      shengActive = false;
+      log(b, '罚雷压顶，得气之势被天威压下');
+    } else if (b.deqiCountTurn === 1) {
+      if (hasRelic(run, 'wuxingzhu')) gainEnergy(run, b, 1); // 五行珠：首次得气吐纳 +1
+      if (run.flags['daoxin']) drawCards(run, b, 1); // 明镜止水：首次得气抽 1
+    }
   }
 
-  // ---- 五行周天（连续触发 4 次行云流水）----
-  if (liushui && !b.zhoutianTriggered && b.chainLinks >= 4) {
-    b.zhoutianTriggered = true;
-    b.zhoutianTotal += 1;
-    drawCards(run, b, 2);
-    b.freeNextCard = true;
-    if (hasRelic(run, 'hetu')) b.player.energy += 1;
-    log(b, '【五行周天】圆满！抽 2 张，下一张牌费用为 0');
-  }
-
-  // ---- 效果执行 ----
-  executeEffects(run, b, inst, def.id, eff, mult, target, xCost, liushui);
-
-  // ---- 行位更新 ----
-  if (element !== 'none') b.xingwei = element as Element;
-
-  // ---- 计数与心法触发 ----
-  b.cardsPlayed += 1;
-  if (def.type === 'attack') b.attacksPlayed += 1;
-  if (def.element !== 'none') {
-    b.playedByElement[def.element] = (b.playedByElement[def.element] ?? 0) + 1;
-    if (def.element === 'water') b.playedByElement['water_turn'] = (b.playedByElement['water_turn'] ?? 0) + 1;
-    if (def.element === 'metal') {
-      const total = b.playedByElement['metal'] ?? 0;
-      const jianxinN = powerN(b, 'jianxintongming');
-      if (jianxinN > 0 && total % jianxinN === 0) {
-        drawCards(run, b, 1);
-        b.player.energy += 1;
+  // ---- 链 / 周天 / 行位更新 / 滞气标记 ----
+  let strongReverse = false;
+  if (elem !== 'none') {
+    if (oldStance && generates(oldStance, elem)) {
+      b.chain.push(elem as Element);
+    } else {
+      b.chain = [elem as Element];
+      delete b.playedByElement['_chainCarry'];
+    }
+    if (oldStance && overcomes(elem as Element, oldStance) && !hasFruit(run, 'niyunzhenqi')) {
+      strongReverse = true; // 结算完本牌后 shengBlocked = true
+    }
+    b.stance = elem as Element;
+    // 五行周天：chain 覆盖 5 行（一气化三清为 4 行），每回合限 1 次
+    const need = hasFruit(run, 'yiqihuasanqing') ? 4 : 5;
+    if (!b.zhoutianTriggered && new Set(b.chain).size >= need) {
+      b.zhoutianTriggered = true;
+      b.zhoutianTotal += 1;
+      gainEnergy(run, b, 3);
+      b.tianren = true;
+      log(b, '【五行周天】圆满！吐纳 +3，天人合一待发');
+      if (hasRelic(run, 'leijimu')) {
+        for (const e of [...aliveEnemies(b)]) enemyTakeAttack(run, b, e, 8); // 雷击木
+        log(b, '雷击木引落小雷，全体 8 伤');
       }
-      if (hasRelic(run, 'jiansui') && total % 3 === 0) drawCards(run, b, 1);
     }
+  }
+
+  // ---- 两段效果选取 ----
+  let baseEff: CardEffects;
+  let shengEff: CardEffects | undefined;
+  let dualExtra: CardEffects | undefined; // 双行得气：另一行的完整段
+  if (def.dual) {
+    const d = def.dual;
+    baseEff = inst.upgraded ? (pickB ? d.bUp : d.aUp) : (pickB ? d.b : d.a);
+    if (shengActive) dualExtra = inst.upgraded ? (pickB ? d.aUp : d.bUp) : (pickB ? d.a : d.b);
+  } else {
+    baseEff = inst.upgraded ? def.upBase : def.base;
+    shengEff = shengActive ? (inst.upgraded ? (def.upSheng ?? def.sheng) : def.sheng) : undefined;
+  }
+
+  // 冥想：本回合袖藏上限 +1（契约点：按卡 id 挂接）
+  if (def.id === 'mingxiang') b.sleeveCapBonus += 1;
+
+  // ---- 执行 ----
+  executeCard(run, b, inst, def.id, elem, baseEff, shengEff, shengActive, target, xCost);
+  if (dualExtra) executeCard(run, b, inst, def.id, elem, dualExtra, undefined, false, target, xCost);
+
+  // 自身灼烧合计钳 ≥0（炎爆：基础 +2，得气段 −2）
+  const selfBurn = (baseEff.selfBurn ?? 0)
+    + (shengActive ? (shengEff?.selfBurn ?? 0) + (dualExtra?.selfBurn ?? 0) : 0);
+  if (selfBurn > 0) addPlayerStatus(b, 'zhuoshao', selfBurn);
+
+  // ---- 心法登记（打出时若得气立即执行 sheng 一次，已在 executeCard 完成） ----
+  if (def.type === 'power') {
+    b.powers.push({ cardId: def.id, upgraded: inst.upgraded, counter: 0 });
+    // 火德真身得气段：自身灼烧全清（数据难表达的挂点）
+    if (def.id === 'huodezhenshen' && shengActive) delete b.player.statuses.zhuoshao;
+  }
+
+  // ---- 计数与触发 ----
+  b.cardsPlayed += 1;
+  if (def.type === 'attack') {
+    b.attacksPlayed += 1;
+    b.playedByElement['_atkTurn'] = (b.playedByElement['_atkTurn'] ?? 0) + 1;
+  }
+  const countElem: CardElement = def.dual ? elem : def.element;
+  if (countElem !== 'none') {
+    b.playedByElement[countElem] = (b.playedByElement[countElem] ?? 0) + 1;
+    b.playedByElement[`${countElem}_turn`] = (b.playedByElement[`${countElem}_turn`] ?? 0) + 1;
+    if (countElem === 'metal') {
+      // 剑心通明：每打出第 N 张金牌抽 1 并吐纳 +1
+      const jx = findPower(b, 'jianxintongming');
+      if (jx) {
+        const every = jx.upgraded ? 2 : 3;
+        if ((b.playedByElement['metal'] ?? 0) % every === 0) {
+          drawCards(run, b, 1);
+          gainEnergy(run, b, 1);
+        }
+      }
+    }
+  } else {
+    b.playedByElement['none_turn'] = (b.playedByElement['none_turn'] ?? 0) + 1;
+  }
+
+  // ---- 滞气生效（结算完本牌后） ----
+  if (strongReverse) {
+    b.shengBlocked = true;
+    log(b, '强逆行位，气机逆乱（下一张牌无法得气）');
   }
 
   // ---- 牌去向 ----
   if (def.type === 'power') {
-    b.powers.push({ cardId: def.id, upgraded: inst.upgraded, counter: 0 });
-    // 天一生水：灵气上限 +1，气血上限 −N
-    if (def.id === 'tianyishengshui') {
-      run.energyMax += 1;
-      const loss = eff.n ?? 8;
-      run.maxHp -= loss;
-      run.hp = Math.min(run.hp, run.maxHp);
-      checkPlayerDeath(run, b);
-    }
-  } else if (eff.exhaust || inst.vanish) {
+    // 心法常驻，不进弃牌堆
+  } else if (baseEff.exhaust || inst.vanish) {
     b.exhaustPile.push(inst);
   } else {
     b.discardPile.push(inst);
   }
+
+  b.lastPlayed = def.id;
 }
 
-/** 效果执行（含攻击伤害管线 §4.3） */
-function executeEffects(
-  run: RunState, b: BattleState, inst: CardInstance, cardId: string,
-  eff: CardEffects, liushuiMult: number, target: number | undefined, xCost: number,
-  liushuiTriggered: boolean,
+/** 选定单体目标（缺省取最左存活敌人） */
+function pickTargetEnemy(b: BattleState, target?: number): EnemyState | null {
+  const alive = aliveEnemies(b);
+  if (alive.length === 0) return null;
+  return alive.find((e) => e.uid === target) ?? alive[0];
+}
+
+/** 执行一张牌的一段（含 special 脚本与攻击管线），sheng 段的攻击字段并入攻击结算 */
+function executeCard(
+  run: RunState, b: BattleState, inst: CardInstance, cardId: string, elem: CardElement,
+  eff: CardEffects, sheng: CardEffects | undefined, deqi: boolean,
+  target: number | undefined, xCost: number,
 ) {
   const def = getCard(cardId);
-  const pickTarget = (): EnemyState | null => {
-    const alive = aliveEnemies(b);
-    if (alive.length === 0) return null;
-    const t = alive.find((e) => e.uid === target);
-    return t ?? alive[0];
-  };
 
-  // ---- 特殊脚本 ----
   switch (eff.special) {
-    case 'cuifeng':
-      b.player.attackBuffs.push({ bonus: eff.n ?? 4, left: eff.n2 ?? 2 });
-      break;
-    case 'huichunshu': {
-      if (b.huichunshuUses >= 2) { log(b, '回春术本场已用尽'); break; }
-      b.huichunshuUses += 1;
-      run.hp = Math.min(run.maxHp, run.hp + Math.floor((eff.n ?? 4) * liushuiMult));
+    case 'cuifeng': { // 淬锋：本回合接下来 n2 张攻击牌 +n 伤（得气段：改为 +sheng.n）
+      const bonus = deqi && sheng?.n !== undefined ? sheng.n : eff.n ?? 4;
+      b.player.attackBuffs.push({ bonus, left: eff.n2 ?? 2 });
       break;
     }
-    case 'chunhui': {
-      const negatives: StatusId[] = ['xuruo', 'yishang', 'zhuoshao', 'drawDown', 'energyDown', 'handCapDown', 'blockHalf'];
+    case 'jianqizongheng': { // 剑气纵横：damage 基础；得气段每次得气（含本次）+n
+      const extra = deqi ? (sheng?.n ?? 4) * b.deqiCountTurn : 0;
+      attackWithCard(run, b, inst, def.id, elem,
+        { ...eff, damage: (eff.damage ?? 8) + extra }, deqi ? sheng : undefined, deqi, target);
+      break;
+    }
+    case 'baihong': { // 白虹贯日：目标无护体时 +n；得气段另有 ruanhua（走通用 sheng）
+      const t = pickTargetEnemy(b, target);
+      const bonus = t && t.block === 0 ? eff.n ?? 8 : 0;
+      attackWithCard(run, b, inst, def.id, elem,
+        { ...eff, damage: (eff.damage ?? 17) + bonus }, deqi ? sheng : undefined, deqi, target);
+      break;
+    }
+    case 'huichunshu': { // 回春术：每场限 2 次
+      if (b.huichunshuUses >= 2) {
+        log(b, '回春术本场已用尽');
+      } else {
+        b.huichunshuUses += 1;
+        heal(run, eff.heal ?? eff.n ?? 5);
+      }
+      if (deqi && sheng) applyCommon(run, b, elem, sheng, target);
+      break;
+    }
+    case 'chunhui': { // 春回大地：移除自身全部负面，每个抽 1；得气每个回 sheng.n 血
+      const negatives: StatusId[] = ['zhuoshao', 'qizhi', 'pozhan', 'drawDown', 'tunaDown', 'sleeveBan', 'blockHalf'];
       let removed = 0;
       for (const s of negatives) {
-        if ((b.player.statuses[s] ?? 0) > 0) { delete b.player.statuses[s]; removed += 1; }
+        if ((b.player.statuses[s] ?? 0) > 0) {
+          delete b.player.statuses[s];
+          removed += 1;
+        }
       }
       drawCards(run, b, removed);
-      if (eff.n) run.hp = Math.min(run.maxHp, run.hp + removed * eff.n);
+      const per = (eff.n ?? 0) + (deqi ? sheng?.n ?? 3 : 0);
+      if (per > 0) heal(run, per * removed);
+      applyCommon(run, b, elem, { ...eff, special: undefined, n: undefined }, target);
       break;
     }
-    case 'kurong':
-      run.hp -= eff.loseHp ?? 7;
-      checkPlayerDeath(run, b);
+    case 'kurong': { // 枯荣轮转：燃寿 1 年（得气免燃寿）
+      if (!deqi) burnLife(run, b, eff.burnLife ?? 1);
       if (b.outcome !== 'ongoing') return;
-      b.player.energy += eff.energy ?? 3;
-      drawCards(run, b, eff.draw ?? 3);
+      applyCommon(run, b, elem, { ...eff, special: undefined, burnLife: undefined }, target);
+      if (deqi && sheng) applyCommon(run, b, elem, { ...sheng, burnLife: undefined }, target);
       break;
-    case 'jiling':
-      b.player.energy += Math.floor((eff.energy ?? 1) * 1); // 灵气不吃加成
-      b.xingwei = 'water';
-      break;
-    case 'guanlan': {
-      const n = Math.min(eff.n ?? 3, b.drawPile.length + b.discardPile.length);
-      if (b.drawPile.length < n) {
-        const r = rngShuffle(run.rng, 'shuffle', b.discardPile);
-        run.rng = r.state;
-        b.drawPile = [...b.drawPile, ...r.value];
-        b.discardPile = [];
+    }
+    case 'hanlu': { // 寒露：击杀时回 4 血并吐纳 +1
+      const t = pickTargetEnemy(b, target);
+      if (t) {
+        attackWithCard(run, b, inst, def.id, elem, eff, deqi ? sheng : undefined, deqi, t.uid);
+        if (t.hp <= 0) {
+          heal(run, 4);
+          gainEnergy(run, b, 1);
+        }
       }
-      const top = b.drawPile.slice(0, n);
+      break;
+    }
+    case 'jiling': // 汲灵术：+energy（行位已由正常流程更新为水）
+      applyCommon(run, b, elem, { ...eff, special: undefined }, target);
+      if (deqi && sheng) applyCommon(run, b, elem, sheng, target);
+      break;
+    case 'guanlan': { // 观澜：预视牌库顶 n 张可弃任意，然后抽 draw
+      const n = deqi && sheng?.n !== undefined ? sheng.n : eff.n ?? 3;
+      const top = revealTop(run, b, n);
       if (top.length > 0) {
         b.pendingChoice = {
-          kind: 'scry', cards: top, maxPick: top.length,
+          kind: 'scry', cards: [...top], maxPick: top.length,
           prompt: '观澜：选择要弃置的牌（可不选）', sourceCard: cardId,
+          data: { draw: eff.draw ?? 1 },
         };
       } else {
-        drawCards(run, b, 1);
+        drawCards(run, b, eff.draw ?? 1);
       }
       break;
     }
-    case 'jinghua': {
+    case 'jinghua': { // 镜花水月：复制本场上一张打出的牌入手（0 费；未得气回合末消散）
+      if (b.lastPlayed) {
+        const srcDef = getCard(b.lastPlayed);
+        if (!srcDef.bonded && srcDef.type !== 'curse') {
+          const copy = makeCard(run, b.lastPlayed, inst.upgraded); // 参悟：复制参悟态
+          copy.tempCost = 0;
+          if (!deqi) copy.vanish = true; // 得气段：可袖藏（不消散）
+          if (b.hand.length < HAND_CAP) b.hand.push(copy);
+          else b.discardPile.push(copy);
+        }
+      }
+      break;
+    }
+    case 'canghai': { // 沧海纳川：选择弃任意张，每张 +n 水护体；得气每张回 2 血
       if (b.hand.length > 0) {
         b.pendingChoice = {
-          kind: 'pickHand', cards: [...b.hand], maxPick: 1,
-          prompt: '镜花水月：选择 1 张手牌复制', sourceCard: cardId, upgraded: inst.upgraded,
+          kind: 'discardHand', cards: [...b.hand], maxPick: b.hand.length,
+          prompt: '沧海纳川：选择要弃置的牌', sourceCard: cardId,
+          data: { per: eff.block ?? eff.n ?? 7, healPer: deqi ? sheng?.heal ?? 2 : 0 },
         };
       }
       break;
     }
-    case 'canghai': {
-      const count = b.hand.length;
-      const per = eff.n ?? 6;
-      for (const c of [...b.hand]) {
-        if (c.vanish) b.exhaustPile.push(c);
-        else b.discardPile.push(c);
-      }
-      b.hand = [];
-      gainBlock(run, b, Math.floor(count * per * liushuiMult));
-      run.hp = Math.min(run.maxHp, run.hp + count);
-      break;
-    }
-    case 'dayan': {
-      const t0 = pickTarget();
-      if (t0) attackPipeline(run, b, inst, eff, t0, liushuiMult, liushuiTriggered);
-      if (b.discardPile.length > 0 && b.outcome === 'ongoing') {
-        b.pendingChoice = {
-          kind: 'pickDiscard', cards: [...b.discardPile], maxPick: 1,
-          prompt: '大衍回澜：选 1 张弃牌置于牌库顶', sourceCard: cardId,
-        };
-      }
-      return;
-    }
-    case 'yinhuo': {
-      const t = pickTarget();
+    case 'yinhuo': { // 引火符【引爆】：目标立即受其灼烧层数伤害（层数保留）；得气引爆 2 次
+      const t = pickTargetEnemy(b, target);
       if (t) {
-        const cur = t.statuses.zhuoshao ?? 0;
-        t.statuses.zhuoshao = cur * 2 + (eff.n ?? 0);
+        const times = deqi ? 2 : 1;
+        const pct = eff.n ?? 100;
+        for (let i = 0; i < times; i++) {
+          if (t.hp <= 0) break;
+          const layers = t.statuses.zhuoshao ?? 0;
+          if (layers > 0) enemyLoseHp(run, b, t, Math.floor((layers * pct) / 100));
+        }
       }
       break;
     }
-    case 'zhulong':
-      if (b.xingwei === 'wood') b.player.energy += 1;
-      break;
-    case 'sanmei': {
+    case 'sanmei': { // 三昧真火：燃尽剩余全部灵气（先扣本牌费用），每点 n 伤
       const extra = b.player.energy;
       b.player.energy = 0;
-      const t = pickTarget();
-      if (t && extra > 0) {
-        attackPipeline(run, b, inst, { damage: extra * (eff.n ?? 10) }, t, liushuiMult, liushuiTriggered);
+      const per = deqi && sheng?.n !== undefined ? sheng.n : eff.n ?? 12;
+      if (extra > 0) {
+        attackWithCard(run, b, inst, def.id, elem,
+          { damage: extra * per }, undefined, deqi, target);
       }
       break;
     }
-    case 'yinghuo': {
-      const t = pickTarget();
-      if (t && xCost > 0) {
-        attackPipeline(run, b, inst, { damage: xCost * (eff.n ?? 9) }, t, liushuiMult, liushuiTriggered);
-        if (t.hp > 0) addEnemyStatus(run, b, t, 'zhuoshao', xCost);
+    case 'yinghuo': { // 荧惑守心：X×n 伤 + X 灼烧；得气每点 +2
+      const per = (eff.n ?? 10) + (deqi ? sheng?.n ?? 2 : 0);
+      if (xCost > 0) {
+        const t = pickTargetEnemy(b, target);
+        if (t) {
+          attackWithCard(run, b, inst, def.id, elem, { damage: xCost * per }, undefined, deqi, t.uid);
+          if (t.hp > 0) addEnemyStatus(run, b, t, 'zhuoshao', xCost);
+        }
       }
       break;
     }
-    case 'dadimaidong': {
+    case 'dadimaidong': { // 大地脉动：block + 每层固本额外 +n 护体
       const guben = b.player.statuses.guben ?? 0;
-      gainBlock(run, b, Math.floor(((eff.block ?? 13) + guben * (eff.n ?? 3)) * liushuiMult));
-      return afterAttackEffects(run, b, eff, pickTarget());
+      gainPlayerBlock(run, b, (eff.block ?? 12) + guben * (eff.n ?? 3), elem);
+      applyCommon(run, b, elem, { ...eff, special: undefined, block: undefined, n: undefined }, target);
+      if (deqi && sheng) applyCommon(run, b, elem, sheng, target);
+      break;
     }
-    case 'chengshan': {
-      const t = pickTarget();
-      if (t) {
-        const dmg = Math.floor((b.player.block * (eff.n ?? 100)) / 100);
-        attackPipeline(run, b, inst, { damage: dmg }, t, liushuiMult, liushuiTriggered);
+    case 'chengshan': { // 承山印【掷山】：失去至多 n 点护体，造成失去量 ×n2% 伤害（得气上限 +6）
+      const cap = (eff.n ?? 12) + (deqi ? sheng?.n ?? 6 : 0);
+      const lost = Math.min(b.player.block, cap);
+      b.player.block -= lost;
+      if (lost > 0) {
+        attackWithCard(run, b, inst, def.id, elem,
+          { damage: Math.floor((lost * (eff.n2 ?? 150)) / 100) }, undefined, deqi, target);
       }
       break;
     }
-    case 'guanxiang': {
-      const n = Math.min(5, b.drawPile.length + b.discardPile.length);
-      if (b.drawPile.length < n) {
-        const r = rngShuffle(run.rng, 'shuffle', b.discardPile);
-        run.rng = r.state;
-        b.drawPile = [...b.drawPile, ...r.value];
-        b.discardPile = [];
-      }
-      const top = b.drawPile.slice(0, n);
+    case 'guanxiang': { // 观想五行：顶 5 选 n 入手
+      const top = revealTop(run, b, 5);
       if (top.length > 0) {
         b.pendingChoice = {
-          kind: 'pickTop', cards: top, maxPick: eff.n ?? 1,
+          kind: 'pickTop', cards: [...top], maxPick: eff.n ?? 1,
           prompt: `观想五行：选 ${eff.n ?? 1} 张入手`, sourceCard: cardId,
         };
       }
       break;
     }
-    case 'wuxinglunzhuan': {
-      const count = b.hand.length;
-      for (const c of [...b.hand]) {
-        if (c.vanish) b.exhaustPile.push(c);
-        else b.discardPile.push(c);
-      }
-      b.hand = [];
-      drawCards(run, b, count);
-      const els = b.hand.map((c) => getCard(c.cardId).element).filter((e) => e !== 'none');
-      const distinct = new Set(els).size === els.length;
-      if (distinct && b.hand.length > 0) {
-        for (const c of b.hand) {
-          const base = getCard(c.cardId).cost;
-          if (typeof base === 'number') c.tempCost = Math.max(0, base - 1);
-        }
-        log(b, '五行轮转：新手牌五行互异，费用 −1！');
-      }
-      break;
-    }
-    case 'zuowang': {
-      if (b.hand.length > 0) {
+    case 'canjuan': { // 问长生·残卷：顶 n 选 1 入手（参悟：另可选 1 张置底）
+      const top = revealTop(run, b, eff.n ?? 3);
+      if (top.length > 0) {
         b.pendingChoice = {
-          kind: 'exhaustHand', cards: [...b.hand], maxPick: b.hand.length,
-          prompt: '坐忘：选择要放逐的牌（每张 +1 灵气）', sourceCard: cardId, upgraded: inst.upgraded,
+          kind: 'pickTop', cards: [...top], maxPick: 1,
+          prompt: '问长生·残卷：选 1 张入手', sourceCard: cardId,
+          upgraded: inst.upgraded,
+          data: inst.upgraded ? { bottom: 1 } : undefined,
         };
       }
       break;
     }
-    case 'zhoutianX': {
-      // 周天大衍诀：免费依次打出牌库顶 X 张牌（随机目标）
-      for (let i = 0; i < xCost; i++) {
-        if (b.outcome !== 'ongoing') break;
-        if (b.drawPile.length === 0) {
-          if (b.discardPile.length === 0) break;
-          const r = rngShuffle(run.rng, 'shuffle', b.discardPile);
-          run.rng = r.state;
-          b.drawPile = r.value;
-          b.discardPile = [];
-        }
-        const next = b.drawPile.shift();
-        if (!next) break;
-        const ndef = getCard(next.cardId);
-        if (ndef.type === 'curse' && !ndef.playableCurse) { b.discardPile.push(next); continue; }
+    case 'wuxinglunzhuan': { // 五行轮转：洗回任意张手牌，每张吐纳 +1
+      if (b.hand.length > 0) {
+        b.pendingChoice = {
+          kind: 'returnHand', cards: [...b.hand], maxPick: b.hand.length,
+          prompt: '五行轮转：选择洗回牌库的牌（每张吐纳 +1）', sourceCard: cardId,
+        };
+      }
+      break;
+    }
+    case 'zuowang': { // 坐忘：放逐任意张，每张吐纳 +1 并抽 1（参悟每张再回 2 血）
+      if (b.hand.length > 0) {
+        b.pendingChoice = {
+          kind: 'exhaustHand', cards: [...b.hand], maxPick: b.hand.length,
+          prompt: '坐忘：选择要放逐的牌', sourceCard: cardId, upgraded: inst.upgraded,
+        };
+      }
+      break;
+    }
+    case 'zhoutianX': { // 周天大衍诀：亮出顶 X 张，沿行位顺生衔接者依次免费打出，其余弃去（参悟入手）
+      const revealed = revealTop(run, b, xCost);
+      b.drawPile.splice(0, revealed.length);
+      const rest = [...revealed];
+      let progress = true;
+      while (progress && b.outcome === 'ongoing' && !b.pendingChoice) {
+        progress = false;
+        const stance = b.stance;
+        if (!stance) break;
+        const i = rest.findIndex((c) => {
+          const cd = getCard(c.cardId);
+          if (cd.type === 'curse') return false;
+          const els: CardElement[] = cd.dual ? cd.dual.elements : [cd.element];
+          return els.some((el) => el !== 'none' && generates(stance, el as Element));
+        });
+        if (i < 0) break;
+        const next = rest.splice(i, 1)[0];
+        const cd = getCard(next.cardId);
+        let pick: 'a' | 'b' = 'a';
+        if (cd.dual && !generates(stance, cd.dual.elements[0])) pick = 'b';
         next.tempCost = 0;
         b.hand.push(next);
         const alive = aliveEnemies(b);
@@ -1211,180 +1582,193 @@ function executeEffects(
           run.rng = r.state;
           tgt = r.value.uid;
         }
-        playCard(run, b, next.uid, tgt);
-        if (b.pendingChoice) break; // 连打中出现选择则中断
+        playCard(run, b, next.uid, tgt, pick);
+        progress = true;
+      }
+      for (const c of rest) {
+        if (inst.upgraded && b.hand.length < HAND_CAP) b.hand.push(c);
+        else b.discardPile.push(c);
       }
       break;
     }
-    case 'yezhang':
-      break; // 业障：无其他效果，走放逐
-    case 'jinleifu': {
-      const t = pickTarget();
-      if (liushuiTriggered) {
-        for (const e of aliveEnemies(b)) attackPipeline(run, b, inst, eff, e, liushuiMult, liushuiTriggered);
-      } else if (t) {
-        attackPipeline(run, b, inst, eff, t, liushuiMult, liushuiTriggered);
-      }
-      return afterCommon(run, b, eff, liushuiMult);
-    }
-    case 'jianqizongheng': {
-      const t = pickTarget();
-      if (t) attackPipeline(run, b, inst, { damage: b.cardsPlayed * (eff.n ?? 4) }, t, liushuiMult, liushuiTriggered);
+    case 'yezhang': // 业障：花 2 灵气打出以放逐，无其他效果
       break;
-    }
-    case 'baihong': {
-      const t = pickTarget();
-      if (t) {
-        let dmg = eff.damage ?? 18;
-        if ((t.statuses.pojia ?? 0) > 0) dmg *= 2;
-        attackPipeline(run, b, inst, { damage: dmg }, t, liushuiMult, liushuiTriggered);
-      }
-      break;
-    }
-    case 'mudun':
-      gainBlock(run, b, Math.floor((eff.block ?? 8) * liushuiMult));
-      if (liushuiTriggered) drawCards(run, b, 1);
-      return afterCommon(run, b, { ...eff, block: undefined }, liushuiMult);
-    case 'hanlu': {
-      const t = pickTarget();
-      if (t) {
-        attackPipeline(run, b, inst, eff, t, liushuiMult, liushuiTriggered);
-        if (t.hp <= 0) {
-          run.hp = Math.min(run.maxHp, run.hp + 4);
-          b.player.energy += 1;
-        }
-      }
-      break;
-    }
     default: {
       // ---- 通用 DSL ----
-      if (eff.damage !== undefined || def.type === 'attack') {
-        if (eff.aoe) {
-          for (const e of [...aliveEnemies(b)]) attackPipeline(run, b, inst, eff, e, liushuiMult, liushuiTriggered);
-        } else {
-          const t = pickTarget();
-          if (t) attackPipeline(run, b, inst, eff, t, liushuiMult, liushuiTriggered);
-        }
+      const isAttack = def.type === 'attack' || eff.damage !== undefined;
+      if (isAttack) {
+        attackWithCard(run, b, inst, def.id, elem, eff, deqi ? sheng : undefined, deqi, target);
       }
-      afterCommon(run, b, eff, liushuiMult);
-      // 非攻击牌的对敌状态（技能类）
-      if (def.type !== 'attack') {
-        const t2 = pickTarget();
-        afterAttackEffects(run, b, eff, t2);
+      applyCommon(run, b, elem, { ...eff, special: undefined }, target, { skipAttack: isAttack });
+      if (deqi && sheng) {
+        // 得气段追加：bonusDamage/extraHit/makeAoe 已并入攻击结算，其余字段追加执行
+        applyCommon(run, b, elem, sheng, target, { skipAttack: isAttack });
+        if (!isAttack && sheng.damage !== undefined) {
+          attackWithCard(run, b, inst, def.id, elem, sheng, undefined, deqi, target);
+        }
       }
       return;
     }
   }
-  afterCommon(run, b, eff, liushuiMult);
+  // special 分支的得气追加段（攻击类 special 已并入；此处补非攻击字段）
+  if (deqi && sheng && eff.special
+    && !['huichunshu', 'chunhui', 'kurong', 'jiling', 'dadimaidong'].includes(eff.special)) {
+    applyCommon(run, b, elem, { ...sheng, n: undefined, heal: eff.special === 'canghai' ? undefined : sheng.heal }, target, { skipAttack: true });
+  }
 }
 
-/** 通用数值效果（护体/抽牌/灵气/回血/自伤/自身状态） */
-function afterCommon(run: RunState, b: BattleState, eff: CardEffects, mult: number) {
-  if (eff.block) gainBlock(run, b, Math.floor(eff.block * mult));
-  if (eff.heal) run.hp = Math.min(run.maxHp, run.hp + Math.floor(eff.heal * mult));
-  if (eff.maxHp) { run.maxHp += eff.maxHp; run.hp = Math.min(run.hp, run.maxHp); }
+/** 通用数值效果（护体/抽牌/灵气/回血/自伤/状态；不含攻击 damage 主段） */
+function applyCommon(
+  run: RunState, b: BattleState, elem: CardElement, eff: CardEffects,
+  target: number | undefined, opts: { skipAttack?: boolean } = {},
+) {
+  if (b.outcome !== 'ongoing') return;
+  if (eff.block) gainPlayerBlock(run, b, eff.block, elem);
+  if (eff.heal) heal(run, eff.heal);
+  if (eff.maxHp) {
+    run.maxHp += eff.maxHp;
+    if (eff.maxHp > 0) run.hp = Math.min(run.maxHp, run.hp + eff.maxHp);
+    else run.hp = Math.min(run.hp, run.maxHp);
+  }
   if (eff.draw) drawCards(run, b, eff.draw);
-  if (eff.energy && eff.special !== 'kurong' && eff.special !== 'jiling') b.player.energy += eff.energy;
-  if (eff.selfDamage) playerDamage(run, b, eff.selfDamage, { isAttack: false });
-  if (eff.loseHp && !eff.special) { run.hp -= eff.loseHp; checkPlayerDeath(run, b); }
+  if (eff.energy) gainEnergy(run, b, eff.energy);
+  if (eff.selfDamage) playerSelfDamage(run, b, eff.selfDamage);
+  if (eff.loseHp) playerLoseHp(run, b, eff.loseHp);
+  if (eff.burnLife) burnLife(run, b, eff.burnLife);
+  if (b.outcome !== 'ongoing') return;
   if (eff.applySelf) {
     for (const [k, v] of Object.entries(eff.applySelf)) {
       addPlayerStatus(b, k as StatusId, v as number);
-      if (k === 'tengou') b.player.statuses['_tengouCap' as StatusId] = eff.n ?? 6;
+      if (k === 'tengou' && eff.n && !eff.applySelf['_tengouCap']) {
+        b.player.statuses['_tengouCap'] = eff.n; // 青藤傀儡吸收上限
+      }
     }
   }
   if (eff.applyEnemyAll) {
     for (const e of aliveEnemies(b)) {
-      for (const [k, v] of Object.entries(eff.applyEnemyAll)) addEnemyStatus(run, b, e, k as StatusId, v as number);
+      for (const [k, v] of Object.entries(eff.applyEnemyAll)) {
+        addEnemyStatus(run, b, e, k as StatusId, v as number);
+      }
     }
   }
-}
-
-/** 攻击牌附带的对敌状态与滞涩 */
-function afterAttackEffects(run: RunState, b: BattleState, eff: CardEffects, t: EnemyState | null) {
-  if (!t || t.hp <= 0) return;
-  if (eff.applyEnemy) {
-    for (const [k, v] of Object.entries(eff.applyEnemy)) addEnemyStatus(run, b, t, k as StatusId, v as number);
+  // 攻击段的 applyEnemy/zhise 由攻击管线处理；技能牌在此对目标施加
+  if (!opts.skipAttack) {
+    const t = pickTargetEnemy(b, target);
+    if (t && t.hp > 0) {
+      if (eff.applyEnemy) {
+        for (const [k, v] of Object.entries(eff.applyEnemy)) {
+          addEnemyStatus(run, b, t, k as StatusId, v as number);
+        }
+      }
+      if (eff.zhise) applyZhise(b, t);
+    }
   }
-  if (eff.zhise) applyZhise(b, t);
 }
 
 /**
- * 伤害结算管线（§4.3）：
- * (基础值 + 加值) × 相克 × 行云流水 × 虚弱 × 易伤，每步向下取整。
+ * 玩家攻击管线（§4.3 + §4.4 ④）：
+ * dmg = 基础 + 罡气 + 淬锋 + 龙虎丹 + 得气 bonusDamage（+ 剪伐/桃木剑/剑穗等加值）
+ * → 攻方气滞 ×0.7 → 守方破绽 ×1.4（每步向下取整）→ 敌护体 1:1 →溢出扣血。
+ * 克伐：攻击牌克敌属性时，每次出牌对每个受击目标结算一次。
  */
-function attackPipeline(
-  run: RunState, b: BattleState, inst: CardInstance, eff: CardEffects,
-  target: EnemyState, liushuiMult: number, liushuiTriggered: boolean,
+function attackWithCard(
+  run: RunState, b: BattleState, inst: CardInstance, cardId: string, elem: CardElement,
+  eff: CardEffects, sheng: CardEffects | undefined, deqi: boolean, target: number | undefined,
 ) {
-  const def = getCard(inst.cardId);
-  const times = eff.times ?? 1;
-  const isFirstAttackBattle = !b.playedByElement['_attacked'];
-  b.playedByElement['_attacked'] = 1;
+  const def = getCard(cardId);
+  const aoe = !!eff.aoe || !!sheng?.makeAoe;
+  const primary = pickTargetEnemy(b, target);
+  const targets = aoe ? [...aliveEnemies(b)] : primary ? [primary] : [];
+  if (targets.length === 0) return;
+  const times = (eff.times ?? 1) + (sheng?.extraHit ? 1 : 0);
 
-  for (let i = 0; i < times; i++) {
-    if (target.hp <= 0 || b.outcome !== 'ongoing') break;
-    // ---- 加值 ----
-    let dmg = eff.damage ?? 0;
-    dmg += b.player.statuses.gangqi ?? 0;
-    dmg += b.longhuBonus;
-    // 淬锋类（第一段即消耗一次）
-    if (i === 0) {
-      for (const buff of b.player.attackBuffs) {
-        if (buff.left > 0) { dmg += buff.bonus; buff.left -= 1; }
-      }
-      b.player.attackBuffs = b.player.attackBuffs.filter((x) => x.left > 0);
-    }
-    // 桃木剑：每场第一张攻击牌 +4
-    if (isFirstAttackBattle && i === 0 && hasRelic(run, 'taomujian')) dmg += 4;
-    // 灯芯草：每回合第一张火牌 +3
-    if (def.element === 'fire' && (b.playedByElement['fire'] ?? 0) === 0 && hasRelic(run, 'dengxincao')) dmg += 3;
-    // 庚金剑域：每回合第一张金牌 +N
-    if (def.element === 'metal' && (b.playedByElement['metal'] ?? 0) === 0) dmg += powerN(b, 'gengjinjianyu');
-    // 剑心通明（根基突破）：金牌 +2 / 剑冢祭拜：金牌 +1
-    if (def.element === 'metal') {
-      if (run.breakthroughs.includes('jianxin_genji')) dmg += 2;
-      if (run.flags['jianji']) dmg += 1;
-    }
-    // 贪嗔：在手牌时攻击牌 −2
-    if (curseInHand(b, 'tanchen')) dmg -= 2;
-    dmg = Math.max(0, dmg);
-
-    // ---- 乘区（每步向下取整）----
-    let ke = false;
-    if (def.element !== 'none' && target.element !== 'none' && overcomes(def.element as Element, target.element as Element)) {
-      ke = true;
-      const keMult = hasRelic(run, 'taijitu') ? 1.75 : 1.5;
-      dmg = Math.floor(dmg * keMult);
-      if (i === 0) log(b, `克制！伤害 ×${keMult}`);
-    }
-    if (liushuiTriggered) dmg = Math.floor(dmg * liushuiMult);
-    if ((b.player.statuses.xuruo ?? 0) > 0) dmg = Math.floor(dmg * 0.75);
-    if ((target.statuses.yishang ?? 0) > 0) dmg = Math.floor(dmg * 1.5);
-
-    // 火德真身：每回合第一张攻击牌附加灼烧
-    if (b.attacksPlayed === 0 && i === 0) {
-      const huode = powerN(b, 'huodezhenshen');
-      if (huode > 0) addEnemyStatus(run, b, target, 'zhuoshao', huode);
-    }
-
-    enemyTakeAttack(run, b, target, dmg, { ignoreBlock: eff.ignoreBlock });
-    if (dmg > (run.flags['maxHit'] ?? 0)) run.flags['maxHit'] = dmg;
-
-    // ---- 相克附加异常（§4.4 ②）----
-    if (ke && target.hp > 0) {
-      const keEff = KE_EFFECT[def.element as Element];
-      switch (keEff) {
-        case 'pojia': addEnemyStatus(run, b, target, 'pojia', 1); break;
-        case 'chanfu': addEnemyStatus(run, b, target, 'chanfu', 1); break;
-        case 'zhise': applyZhise(b, target); break;
-        case 'ximie': applyXimie(target); break;
-        case 'rongchuan': addEnemyStatus(run, b, target, 'zhuoshao', 3); break;
-      }
+  // 每次出牌的通用加值
+  let bonus = (b.player.statuses.gangqi ?? 0) + b.longhuBonus + (sheng?.bonusDamage ?? 0);
+  for (const buff of b.player.attackBuffs) {
+    if (buff.left > 0) {
+      bonus += buff.bonus;
+      buff.left -= 1;
     }
   }
-  // 攻击牌附带状态
-  afterAttackEffects(run, b, eff, target);
+  b.player.attackBuffs = b.player.attackBuffs.filter((x) => x.left > 0);
+  const isMetalCard = (def.dual ? elem : def.element) === 'metal';
+  if (isMetalCard && (b.playedByElement['metal_turn'] ?? 0) === 0) {
+    bonus += powerN(b, 'gengjinjianyu'); // 庚金剑域：每回合第一张金牌
+  }
+  if (isMetalCard && deqi && hasRelic(run, 'jiansui')) bonus += 2; // 剑穗
+  if (curseInHand(b, 'tanchen')) bonus -= 2; // 贪嗔
+
+  // 火德真身：每回合第一张攻击牌附加灼烧
+  const huode = powerN(b, 'huodezhenshen');
+  const firstAttackTurn = (b.playedByElement['_atkTurn'] ?? 0) === 0;
+
+  for (const t of targets) {
+    if (t.hp <= 0 || b.outcome !== 'ongoing') continue;
+    // ---- 克伐（KEFA_VERB） ----
+    let kefaBonus = 0;
+    let pierceHalf = false;
+    if (def.type === 'attack' && elem !== 'none' && t.element !== 'none'
+      && overcomes(elem as Element, t.element as Element)) {
+      const verb = KEFA_VERB[elem as Element];
+      if (hasRelic(run, 'taomujian') && !b.playedByElement['_kefaFirst']) kefaBonus += 6; // 桃木剑
+      b.playedByElement['_kefaFirst'] = 1;
+      switch (verb) {
+        case 'jianfa': { // 剪伐：移除至多 2 层增益，每层此击 +4
+          const removed = removeEnemyBuffs(t, 2);
+          kefaBonus += removed * 4;
+          break;
+        }
+        case 'potu': // 破土：护体减半且本回合无法获得护体
+          t.block = Math.floor(t.block / 2);
+          t.flags['noBlock'] = 1;
+          break;
+        case 'zhise': // 滞涩
+          applyZhise(b, t);
+          break;
+        case 'jiaoxi': // 浇熄：蓄力中取消蓄力改普通行动；否则移 1 层增益
+          if (t.intent?.kind === 'charge' || (t.flags['charging'] ?? 0) > 0) {
+            t.flags['charging'] = 0;
+            delete t.flags['release'];
+            t.intent = basicMove(t);
+            log(b, `${t.name} 的蓄力被浇熄！`);
+          } else {
+            removeEnemyBuffs(t, 1);
+          }
+          break;
+        case 'rongduan': // 熔锻：此击 50% 无视护体 + 软化
+          pierceHalf = true;
+          addEnemyStatus(run, b, t, 'ruanhua', 1);
+          break;
+      }
+      log(b, `【${KEFA_NAME[verb]}】`);
+    }
+
+    for (let i = 0; i < times; i++) {
+      if (t.hp <= 0 || b.outcome !== 'ongoing') break;
+      let dmg = Math.max(0, (eff.damage ?? 0) + bonus + kefaBonus);
+      if ((b.player.statuses.qizhi ?? 0) > 0) dmg = Math.floor(dmg * 0.7);
+      if ((t.statuses.pozhan ?? 0) > 0) dmg = Math.floor(dmg * 1.4);
+      if (huode > 0 && firstAttackTurn && i === 0) addEnemyStatus(run, b, t, 'zhuoshao', huode);
+      enemyTakeAttack(run, b, t, dmg, { ignoreBlock: eff.ignoreBlock, pierceHalf });
+      if (dmg > (run.flags['maxHit'] ?? 0)) run.flags['maxHit'] = dmg; // 成就"一剑破万法"
+    }
+
+    // 附带状态（基础段 + 得气段）
+    if (t.hp > 0) {
+      if (eff.applyEnemy) {
+        for (const [k, v] of Object.entries(eff.applyEnemy)) {
+          addEnemyStatus(run, b, t, k as StatusId, v as number);
+        }
+      }
+      if (sheng?.applyEnemy) {
+        for (const [k, v] of Object.entries(sheng.applyEnemy)) {
+          addEnemyStatus(run, b, t, k as StatusId, v as number);
+        }
+      }
+      if (eff.zhise || sheng?.zhise) applyZhise(b, t);
+    }
+  }
+  void inst;
 }
 
 // ---------- 选择结算 ----------
@@ -1395,51 +1779,94 @@ export function resolveChoice(run: RunState, b: BattleState, picks: number[]) {
   b.pendingChoice = null;
 
   switch (choice.kind) {
-    case 'scry': { // 观澜：picks = 要弃置的 uid
+    case 'scry': { // 观澜：picks = 要弃置的 uid；然后抽 data.draw
       for (const uid of picks) {
         const i = b.drawPile.findIndex((c) => c.uid === uid);
         if (i >= 0) b.discardPile.push(...b.drawPile.splice(i, 1));
       }
-      drawCards(run, b, 1);
+      drawCards(run, b, choice.data?.['draw'] ?? 1);
       break;
     }
-    case 'pickHand': { // 镜花水月
-      const src = b.hand.find((c) => c.uid === picks[0]);
-      if (src) {
-        const copy = makeCard(run, src.cardId, src.upgraded);
-        copy.tempCost = 0;
-        if (!choice.upgraded) copy.vanish = true; // 未参悟：回合末放逐
-        b.hand.push(copy);
-      }
-      break;
-    }
-    case 'pickDiscard': { // 大衍回澜
-      const i = b.discardPile.findIndex((c) => c.uid === picks[0]);
-      if (i >= 0) b.drawPile.unshift(...b.discardPile.splice(i, 1));
-      break;
-    }
-    case 'pickTop': { // 观想五行
+    case 'pickTop': { // 观想五行/残卷/开窍丹：顶 N 选 M 入手（残卷参悟：第二个 pick 置底）
       let taken = 0;
       for (const uid of picks) {
-        if (taken >= (choice.maxPick ?? 1)) break;
         const i = b.drawPile.findIndex((c) => c.uid === uid);
-        if (i >= 0) { b.hand.push(...b.drawPile.splice(i, 1)); taken += 1; }
+        if (i < 0) continue;
+        if (taken < (choice.maxPick ?? 1)) {
+          const [c] = b.drawPile.splice(i, 1);
+          if (b.hand.length < HAND_CAP) b.hand.push(c);
+          else b.discardPile.push(c);
+          taken += 1;
+        } else if (choice.data?.['bottom']) {
+          const [c] = b.drawPile.splice(i, 1);
+          b.drawPile.push(c); // 置于库底
+          break;
+        }
       }
       break;
     }
-    case 'exhaustHand': { // 坐忘
+    case 'exhaustHand': { // 坐忘：每张吐纳 +1 并抽 1（参悟每张再回 2 血）
       let count = 0;
       for (const uid of picks) {
         const i = b.hand.findIndex((c) => c.uid === uid);
-        if (i >= 0) { b.exhaustPile.push(...b.hand.splice(i, 1)); count += 1; }
+        if (i >= 0) {
+          b.exhaustPile.push(...b.hand.splice(i, 1));
+          count += 1;
+        }
       }
-      b.player.energy += count;
-      if (choice.upgraded) drawCards(run, b, count);
+      gainEnergy(run, b, count);
+      drawCards(run, b, count);
+      if (choice.upgraded) heal(run, count * 2);
       break;
     }
-    case 'dilemma': { // 道心拷问/问道：0 = 弃牌，1 = 受伤
+    case 'discardHand': { // 沧海纳川：每张 +per 水护体（得气每张回 healPer 血）
+      let count = 0;
+      for (const uid of picks) {
+        const i = b.hand.findIndex((c) => c.uid === uid);
+        if (i >= 0) {
+          const [c] = b.hand.splice(i, 1);
+          if (c.vanish) b.exhaustPile.push(c);
+          else b.discardPile.push(c);
+          count += 1;
+        }
+      }
+      if (count > 0) {
+        gainPlayerBlock(run, b, count * (choice.data?.['per'] ?? 7), 'water');
+        const healPer = choice.data?.['healPer'] ?? 0;
+        if (healPer > 0) heal(run, count * healPer);
+      }
+      break;
+    }
+    case 'returnHand': { // 五行轮转：洗回任意张，每张吐纳 +1
+      let count = 0;
+      for (const uid of picks) {
+        const i = b.hand.findIndex((c) => c.uid === uid);
+        if (i >= 0) {
+          const [c] = b.hand.splice(i, 1);
+          delete c.tempCost;
+          b.drawPile.push(c);
+          count += 1;
+        }
+      }
+      if (count > 0) {
+        const r = rngShuffle(run.rng, 'shuffle', b.drawPile);
+        run.rng = r.state;
+        b.drawPile = r.value;
+        gainEnergy(run, b, count);
+      }
+      break;
+    }
+    case 'dilemma': {
+      // 河图：选定开局行位
+      if (choice.data?.['hetu']) {
+        const i = Math.max(0, Math.min(ELEMENTS.length - 1, picks[0] ?? 0));
+        b.stance = ELEMENTS[i];
+        log(b, `河图定行位于【${ELEMENT_NAME[ELEMENTS[i]]}】`);
+        break;
+      }
+      // 道心拷问 / 问道：0 = 弃牌，1 = 受伤
       const discardN = choice.data?.['discard'] ?? 2;
-      const dmg = choice.data?.['damage'] ?? 14;
+      const dmg = choice.data?.['damage'] ?? 16;
       if (picks[0] === 0 && b.hand.length > 0) {
         for (let i = 0; i < discardN && b.hand.length > 0; i++) {
           const r = rngInt(run.rng, 'enemyAI', 0, b.hand.length - 1);
@@ -1447,68 +1874,87 @@ export function resolveChoice(run: RunState, b: BattleState, picks: number[]) {
           b.discardPile.push(...b.hand.splice(r.value, 1));
         }
       } else {
-        playerDamage(run, b, dmg, { isAttack: false });
+        playerSelfDamage(run, b, dmg);
       }
       break;
     }
   }
 }
 
-// ---------- 丹药（战斗内） ----------
+// ---------- 战斗内服丹（§7.3；不耗灵气） ----------
 
-export function usePotionInBattle(run: RunState, b: BattleState, potionId: string, target?: number) {
-  const idx = run.potions.indexOf(potionId);
-  if (idx < 0) return;
-  // 炸炉丹渣：20% 失效
-  if (run.flags['danzha']) {
-    const r = rngInt(run.rng, 'misc', 1, 100);
-    run.rng = r.state;
-    if (r.value <= 20) {
-      run.potions.splice(idx, 1);
-      run.stats.potionsUsed += 1;
-      log(b, '丹药失效了！（炸炉丹渣）');
-      return;
+export function useElixirInBattle(run: RunState, b: BattleState, elixirId: string, target?: number) {
+  const idx = run.elixirs.indexOf(elixirId);
+  if (idx < 0 || b.pendingChoice || b.outcome !== 'ongoing') return;
+  const recipe = getRecipe(elixirId);
+  run.elixirs.splice(idx, 1);
+  run.stats.elixirsUsed += 1;
+  // 丹毒累积（0–12 夹取；阈值的上限扣减由 run 层维护）
+  run.toxin = Math.max(0, Math.min(12, run.toxin + recipe.toxin));
+
+  switch (elixirId) {
+    case 'huiyuandan': // 回 18 血
+      heal(run, 18);
+      break;
+    case 'julingdan': // 吐纳 +3
+      gainEnergy(run, b, 3);
+      break;
+    case 'xuanwudan': // +14 土护体
+      gainPlayerBlock(run, b, 14, 'earth');
+      break;
+    case 'kaiqiaodan': { // 检视牌库顶 5 张，选 2 入手
+      const top = revealTop(run, b, 5);
+      if (top.length > 0) {
+        b.pendingChoice = {
+          kind: 'pickTop', cards: [...top], maxPick: 2,
+          prompt: '开窍丹：选 2 张入手', sourceCard: 'kaiqiaodan',
+        };
+      }
+      break;
     }
-  }
-  run.potions.splice(idx, 1);
-  run.stats.potionsUsed += 1;
-  const alive = aliveEnemies(b);
-  const t = alive.find((e) => e.uid === target) ?? alive[0];
-
-  switch (potionId) {
-    case 'huixuedan': run.hp = Math.min(run.maxHp, run.hp + 12); break;
-    case 'lingqisan': b.player.energy += 2; break;
-    case 'jingangwan': gainBlock(run, b, 12); break;
-    case 'yunlingdan': drawCards(run, b, 3); break;
-    case 'qingxindan': {
-      const negatives: StatusId[] = ['xuruo', 'yishang', 'zhuoshao', 'drawDown', 'energyDown', 'handCapDown', 'blockHalf'];
+    case 'qingxindan': { // 心魔 −1，移除全部负面（丹毒净清已由 toxin 累积处理）
+      run.demon = Math.max(0, run.demon - 1);
+      const negatives: StatusId[] = ['zhuoshao', 'qizhi', 'pozhan', 'drawDown', 'tunaDown', 'sleeveBan', 'blockHalf'];
       for (const s of negatives) delete b.player.statuses[s];
       break;
     }
-    case 'wuxingdan': b.wuxingDanNext = true; break;
-    case 'longhudan': b.longhuBonus += 3; break;
-    case 'guixidan': b.player.statuses.guishaDan = 1; break;
-    case 'huashadan':
-      for (const e of alive) {
-        addEnemyStatus(run, b, e, 'chanfu', 2);
+    case 'wuxingdan': // 下一张牌视为任意行（必得气）
+      b.wuxingDanNext = true;
+      break;
+    case 'longhudan': // 本场攻击 +4
+      b.longhuBonus += 4;
+      break;
+    case 'guixidan': // 本回合受伤减半 + 护体不衰减
+      b.player.statuses.guixiDan = 1;
+      addPlayerStatus(b, 'retainBlock', 1);
+      break;
+    case 'huashadan': // 全体敌人 +4 瘴毒 +2 灼烧
+      for (const e of aliveEnemies(b)) {
+        addEnemyStatus(run, b, e, 'zhangdu', 4);
         addEnemyStatus(run, b, e, 'zhuoshao', 2);
       }
       break;
-    case 'niepansan': run.hp = Math.min(run.maxHp, run.hp + Math.floor(run.maxHp * 0.3)); break;
-    case 'tianjiwan': b.tianjiActive = true; break;
-    case 'wudaodan': {
-      // 战斗内使用：随机参悟一张未参悟手牌（地图使用走选择界面）
+    case 'dahuandan': // 回 50% 上限；燃寿 4 年
+      heal(run, Math.floor(run.maxHp / 2));
+      burnLife(run, b, 4);
+      break;
+    case 'wudaodan': { // 立即参悟 1 张牌（战斗内：随机手牌，并同步牌组）
       const cands = b.hand.filter((c) => !c.upgraded && getCard(c.cardId).type !== 'curse');
       if (cands.length > 0) {
         const r = rngPick(run.rng, 'misc', cands);
         run.rng = r.state;
         r.value.upgraded = true;
-        // 同步牌组中的对应卡
         const deckCard = run.deck.find((c) => c.uid === r.value.uid);
         if (deckCard) deckCard.upgraded = true;
+        run.stats.cardsUpgraded += 1;
       }
       break;
     }
+    case 'tianjidan': // 意图数值全显示 + 每回合抽牌 +1
+      b.tianjiActive = true;
+      break;
   }
-  void t;
+  // 道果"药王鼎"：服丹后抽 1
+  if (hasFruit(run, 'yaowangding')) drawCards(run, b, 1);
+  void target;
 }

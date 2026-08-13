@@ -1,0 +1,166 @@
+/*
+ * 舆图样式（v3 §9 舆图化）——仅由 MapScreen.tsx 引入。
+ * 全部选择器以 .yu-map 限定，复用 styles.css 的 map-* 基础类而不修改它。
+ * 行高 104px 与 MapScreen.tsx 中 ROW_H 保持同步。
+ */
+
+/* ---------- 舆图纸纹底 ---------- */
+.yu-map .map-layers {
+  gap: 0; /* 行距改由固定行高承担，保证 SVG 山径与节点对齐 */
+  margin: 0 2px 12px;
+  border: 1px solid rgba(107, 91, 69, 0.28);
+  border-radius: 8px;
+  background:
+    radial-gradient(ellipse at 28% 18%, rgba(139, 107, 61, 0.055), transparent 55%),
+    radial-gradient(ellipse at 72% 62%, rgba(74, 85, 104, 0.05), transparent 50%),
+    repeating-linear-gradient(0deg, rgba(107, 91, 69, 0.03) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(90deg, rgba(107, 91, 69, 0.022) 0 2px, transparent 2px 9px);
+  box-shadow: inset 0 0 30px rgba(107, 91, 69, 0.16);
+}
+
+/* ---------- 顶栏 ---------- */
+.yu-map .map-topbar {
+  position: sticky;
+  top: -18px; /* 抵消 .map-scroll 的上内边距，吸顶不露缝 */
+  z-index: 5;
+  text-align: center;
+  margin: -12px -4px 10px;
+  padding: 20px 8px 8px;
+  background: linear-gradient(rgba(244, 239, 230, 0.95), rgba(244, 239, 230, 0.82));
+  backdrop-filter: blur(2px);
+  border-bottom: 1px solid rgba(107, 91, 69, 0.22);
+}
+.yu-map .map-title { font-size: 21px; letter-spacing: 4px; }
+.yu-map .map-title.low {
+  color: var(--zhusha);
+  text-shadow: 0 0 8px rgba(195, 39, 43, 0.35);
+  animation: yu-heartbeat 1.2s ease-in-out infinite;
+}
+@keyframes yu-heartbeat {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
+}
+.yu-map .map-topbar-sub { font-size: 12.5px; color: var(--dailan); margin-top: 2px; }
+
+/* 御空/缩地按钮 */
+.yu-map .fly-btn {
+  margin-top: 7px;
+  min-height: 34px;
+  padding: 4px 16px;
+  font-size: 14px;
+  border-radius: 17px;
+  border-color: #3b5b7a;
+  color: #3b5b7a;
+  background: rgba(238, 246, 252, 0.92);
+}
+.yu-map .fly-btn.armed {
+  background: #3b5b7a;
+  color: #fff;
+  border-color: #3b5b7a;
+  box-shadow: 0 0 14px rgba(59, 91, 122, 0.6);
+}
+
+/* ---------- 山径（SVG） ---------- */
+.yu-map .map-paths {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+.yu-map .map-path {
+  fill: none;
+  stroke: #7a6a50;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1 7; /* 点踏石阶式虚线 */
+  opacity: 0.85;
+}
+.yu-map .map-path.years-2 { stroke-dasharray: 1 8; }
+.yu-map .map-path.years-3 { stroke-dasharray: 1 9; opacity: 0.78; }
+.yu-map .map-path.walked {
+  stroke: var(--zhusha);
+  stroke-dasharray: none;
+  stroke-width: 2.5;
+  opacity: 0.72;
+}
+/* 年数标注：拟古篆小字，描纸色边保证可读 */
+.yu-map .map-edge-years {
+  font-size: 12px;
+  letter-spacing: 2px;
+  fill: #6b5b45;
+  font-family: 'STZhongsong', 'FZXiaoZhuanTi-S13T', 'Kaiti SC', 'STKaiti', serif;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: rgba(244, 239, 230, 0.92);
+  stroke-width: 3px;
+}
+.yu-map .map-edge-years.walked { fill: var(--zhusha); }
+
+/* ---------- 地标节点 ---------- */
+.yu-map .map-row {
+  position: relative;
+  z-index: 1; /* 压在山径之上 */
+}
+.yu-map .map-spot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 54px;
+  height: 54px;
+  cursor: pointer;
+}
+/* 竖排地名小字 */
+.yu-map .place-name {
+  position: absolute;
+  left: 56px;
+  top: 50%;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 2.5px;
+  color: #5a4a33;
+  pointer-events: none;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px rgba(244, 239, 230, 0.95),
+    0 0 6px rgba(244, 239, 230, 0.8);
+}
+
+/* 御空模式：隔层落点泛蓝光；同时压暗常规红光以免干扰 */
+.yu-map .map-node.fly-target {
+  border-color: #3b5b7a;
+  cursor: pointer;
+  animation: yu-flypulse 1.4s ease-in-out infinite;
+}
+@keyframes yu-flypulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(59, 91, 122, 0.2), 0 0 10px rgba(59, 91, 122, 0.42); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 91, 122, 0.3), 0 0 22px rgba(59, 91, 122, 0.72); }
+}
+.yu-map .map-layers.flying .map-node.selectable:not(.fly-target) {
+  animation: none;
+  border-color: rgba(43, 43, 43, 0.5);
+  box-shadow: none;
+}
+
+/* ---------- 行脚小人 ---------- */
+.yu-map .map-traveler {
+  position: absolute;
+  left: 50%;
+  top: -34px;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  pointer-events: none;
+  z-index: 3;
+  filter: drop-shadow(0 2px 2px rgba(43, 43, 43, 0.35));
+  animation: yu-bob 2.4s ease-in-out infinite;
+}
+.yu-map .map-traveler svg { width: 100%; height: 100%; display: block; }
+@keyframes yu-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}

@@ -1,6 +1,7 @@
 /**
  * 晒战绩分享图（策划案 §13.2 #8：1080×1920）
  * Canvas 绘制后触发下载，无外部依赖。
+ * v3：统计新增 余寿 X 载 / 心魔 N / 道号 三条。
  */
 import type { RunState } from '../core/types';
 import { getCard } from '../data/cards';
@@ -63,33 +64,37 @@ export function makeShareImage(run: RunState): void {
   g.font = '40px "Kaiti SC", KaiTi, serif';
   g.fillText(s.cause, W / 2, s.daohao ? 630 : 540);
 
-  // 统计
+  // 统计（v3：余寿 / 心魔 / 道号 三条入列）
   const rows: [string, string][] = [
     ['行至', `第${['一', '二', '三'][run.act - 1]}幕 · 第 ${run.floor + 1} 层`],
     ['斩妖', `${run.flags['kills'] ?? 0}`],
     ['精英 / 天劫', `${run.stats.elitesKilled} / ${run.stats.bossesKilled}`],
     ['周天次数', `${run.flags['zhoutianTotal'] ?? 0}`],
-    ['丹药服用', `${run.stats.potionsUsed}`],
+    ['服丹', `${run.stats.elixirsUsed} 枚`],
+    ['余寿', `${Math.max(0, run.lifespan)} 载`],
+    ['心魔', `${run.demon}`],
+    ['道号', s.daohao ?? '——'],
     ['分数', `${s.score}`],
     ['道行', `+${s.daowei}`],
     ['种子', run.seed],
   ];
-  let y = 780;
-  g.font = '44px "Kaiti SC", KaiTi, serif';
+  let y = 720;
+  const rowH = 80;
+  g.font = '42px "Kaiti SC", KaiTi, serif';
   for (const [k, v] of rows) {
     g.textAlign = 'left';
     g.fillStyle = '#6b6154';
     g.fillText(k, 160, y);
     g.textAlign = 'right';
-    g.fillStyle = '#2b2b2b';
+    g.fillStyle = k === '道号' && s.daohao ? '#c3272b' : '#2b2b2b';
     g.fillText(v, W - 160, y);
     g.strokeStyle = 'rgba(43,43,43,0.18)';
     g.lineWidth = 2;
     g.beginPath();
-    g.moveTo(160, y + 22);
-    g.lineTo(W - 160, y + 22);
+    g.moveTo(160, y + 20);
+    g.lineTo(W - 160, y + 20);
     g.stroke();
-    y += 92;
+    y += rowH;
   }
 
   // 卡组五行分布
